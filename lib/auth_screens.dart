@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:beleg_speicher/home_page.dart'; // passt den Pfad an dein Projekt an
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -15,9 +16,18 @@ class _LoginPageState extends State<LoginPage> {
   void _submit() {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      // TODO: Login-Logik hier
+      // TODO: Deine Login-Logik hier
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Anmeldung…')),
+      );
+      // Nach erfolgreicher Anmeldung zur HomePage wechseln:
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const HomePage(
+            firstName: 'Vorname',
+            lastName: 'Nachname',
+          ),
+        ),
       );
     }
   }
@@ -26,21 +36,19 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Anmelden', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: Transform.scale(
             scale: 1.3,
-            child: Image.asset(
-              'assets/Pfeil_Back.png',
-              width: 24,
-              height: 24,
-            ),
+            child: Image.asset('assets/Pfeil_Back.png', width: 24, height: 24),
           ),
           onPressed: () => Navigator.of(context).pop(),
           splashRadius: 24,
           splashColor: Colors.purple.shade700.withOpacity(0.2),
           hoverColor: Colors.purple.shade600.withOpacity(0.1),
         ),
-        title: const Text('Anmelden'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -49,7 +57,21 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             children: [
               TextFormField(
-                decoration: const InputDecoration(labelText: 'E-Mail'),
+                style: const TextStyle(color: Colors.black),
+                decoration: InputDecoration(
+                  labelText: 'E-Mail',
+                  labelStyle: const TextStyle(color: Colors.black),
+                  border: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                        color: Colors.purple.shade400, width: 2),
+                  ),
+                ),
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) =>
                 (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
@@ -57,10 +79,25 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: const InputDecoration(labelText: 'Passwort'),
+                style: const TextStyle(color: Colors.black),
+                decoration: InputDecoration(
+                  labelText: 'Passwort',
+                  labelStyle: const TextStyle(color: Colors.black),
+                  border: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                        color: Colors.purple.shade400, width: 2),
+                  ),
+                ),
                 obscureText: true,
-                validator: (v) =>
-                (v != null && v.length >= 6) ? null : 'Mind. 6 Zeichen',
+                validator: (v) => (v != null && v.length >= 6)
+                    ? null
+                    : 'Mindestens 6 Zeichen',
                 onSaved: (v) => _password = v!,
               ),
               const SizedBox(height: 32),
@@ -70,25 +107,26 @@ class _LoginPageState extends State<LoginPage> {
                   onPressed: _submit,
                   style: ButtonStyle(
                     backgroundColor:
-                    MaterialStateProperty.resolveWith<Color>((states) {
-                      if (states.contains(MaterialState.pressed)) {
-                        return Colors.purple.shade700;
-                      }
-                      return Colors.purple.shade400;
-                    }),
+                    MaterialStateProperty.resolveWith<Color>(
+                            (states) {
+                          if (states.contains(MaterialState.pressed)) {
+                            return Colors.purple.shade700;
+                          }
+                          return Colors.purple.shade400;
+                        }),
                     overlayColor: MaterialStateProperty.all(
-                      Colors.white.withOpacity(0.2),
-                    ),
+                        Colors.white.withOpacity(0.2)),
                     padding: MaterialStateProperty.all(
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 22),
+                      const EdgeInsets.symmetric(
+                          vertical: 16, horizontal: 32),
                     ),
                     shape: MaterialStateProperty.all(
                       RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  child: const Text('Einloggen'),
+                  child: const Text('Einloggen',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -114,9 +152,18 @@ class _RegisterPageState extends State<RegisterPage> {
   void _submit() {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      // TODO: Registrierungs-Logik hier
+      // TODO: Deine Registrierungs-Logik hier
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Registrierung…')),
+      );
+      // Nach erfolgreicher Registrierung zur HomePage wechseln:
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => const HomePage(
+            firstName: 'Vorname',
+            lastName: 'Nachname',
+          ),
+        ),
       );
     }
   }
@@ -125,21 +172,21 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        title: const Text('Registrieren',
+            style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: Transform.scale(
             scale: 1.3,
-            child: Image.asset(
-              'assets/Pfeil_Back.png',
-              width: 24,
-              height: 24,
-            ),
+            child: Image.asset('assets/Pfeil_Back.png',
+                width: 24, height: 24),
           ),
           onPressed: () => Navigator.of(context).pop(),
           splashRadius: 24,
           splashColor: Colors.purple.shade700.withOpacity(0.2),
           hoverColor: Colors.purple.shade600.withOpacity(0.1),
         ),
-        title: const Text('Registrieren'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -148,7 +195,21 @@ class _RegisterPageState extends State<RegisterPage> {
           child: Column(
             children: [
               TextFormField(
-                decoration: const InputDecoration(labelText: 'E-Mail'),
+                style: const TextStyle(color: Colors.black),
+                decoration: InputDecoration(
+                  labelText: 'E-Mail',
+                  labelStyle: const TextStyle(color: Colors.black),
+                  border: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                        color: Colors.purple.shade400, width: 2),
+                  ),
+                ),
                 keyboardType: TextInputType.emailAddress,
                 validator: (v) =>
                 (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
@@ -156,10 +217,25 @@ class _RegisterPageState extends State<RegisterPage> {
               ),
               const SizedBox(height: 16),
               TextFormField(
-                decoration: const InputDecoration(labelText: 'Passwort'),
+                style: const TextStyle(color: Colors.black),
+                decoration: InputDecoration(
+                  labelText: 'Passwort',
+                  labelStyle: const TextStyle(color: Colors.black),
+                  border: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  enabledBorder: const UnderlineInputBorder(
+                    borderSide: BorderSide(color: Colors.black),
+                  ),
+                  focusedBorder: UnderlineInputBorder(
+                    borderSide: BorderSide(
+                        color: Colors.purple.shade400, width: 2),
+                  ),
+                ),
                 obscureText: true,
-                validator: (v) =>
-                (v != null && v.length >= 6) ? null : 'Mind. 6 Zeichen',
+                validator: (v) => (v != null && v.length >= 6)
+                    ? null
+                    : 'Mindestens 6 Zeichen',
                 onSaved: (v) => _password = v!,
               ),
               const SizedBox(height: 32),
@@ -169,25 +245,26 @@ class _RegisterPageState extends State<RegisterPage> {
                   onPressed: _submit,
                   style: ButtonStyle(
                     backgroundColor:
-                    MaterialStateProperty.resolveWith<Color>((states) {
-                      if (states.contains(MaterialState.pressed)) {
-                        return Colors.purple.shade700;
-                      }
-                      return Colors.purple.shade400;
-                    }),
+                    MaterialStateProperty.resolveWith<Color>(
+                            (states) {
+                          if (states.contains(MaterialState.pressed)) {
+                            return Colors.purple.shade700;
+                          }
+                          return Colors.purple.shade400;
+                        }),
                     overlayColor: MaterialStateProperty.all(
-                      Colors.white.withOpacity(0.2),
-                    ),
+                        Colors.white.withOpacity(0.2)),
                     padding: MaterialStateProperty.all(
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 22),
+                      const EdgeInsets.symmetric(
+                          vertical: 16, horizontal: 32),
                     ),
                     shape: MaterialStateProperty.all(
                       RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  child: const Text('Konto erstellen'),
+                  child: const Text('Konto erstellen',
+                      style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],

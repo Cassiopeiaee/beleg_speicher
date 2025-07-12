@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:beleg_speicher/auth_screens.dart'; // Pfad an dein Paket anpassen
+import 'package:beleg_speicher/auth_screens.dart'; // LoginPage & RegisterPage
 
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
@@ -42,9 +42,9 @@ class LandingPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 48),
+
               ElevatedButton(
                 onPressed: () {
-                  // Zur Login-Seite navigieren
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const LoginPage()),
                   );
@@ -61,10 +61,11 @@ class LandingPage extends StatelessWidget {
                   style: TextStyle(fontSize: 18, color: Colors.white),
                 ),
               ),
+
               const SizedBox(height: 16),
+
               OutlinedButton(
                 onPressed: () {
-                  // Zur Registrieren-Seite navigieren
                   Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const RegisterPage()),
                   );
@@ -81,7 +82,9 @@ class LandingPage extends StatelessWidget {
                   style: TextStyle(fontSize: 18, color: Colors.purple.shade400),
                 ),
               ),
+
               const SizedBox(height: 24),
+
               TextButton(
                 onPressed: () {
                   // TODO: AGB & Datenschutz
