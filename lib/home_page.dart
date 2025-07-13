@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:beleg_speicher/LandingPage.dart'; // LandingPage für Logout
+import 'package:beleg_speicher/LandingPage.dart';
 
 class HomePage extends StatelessWidget {
   final String firstName;
@@ -38,8 +38,7 @@ class HomePage extends StatelessWidget {
         },
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Hinzufügen',
-            style: TextStyle(color: Colors.white)),
+        label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
       ),
       body: SafeArea(
         child: Padding(
@@ -70,7 +69,6 @@ class HomePage extends StatelessWidget {
                 color: Colors.purple.shade400,
                 margin: const EdgeInsets.only(bottom: 16),
               ),
-
               // Search Bar
               Container(
                 decoration: BoxDecoration(
@@ -89,7 +87,6 @@ class HomePage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-
               // Year Buttons (horizontal scroll)
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -108,24 +105,22 @@ class HomePage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Container(height: 2, color: Colors.purple.shade400),
-
               const SizedBox(height: 16),
-
-              // Feature List
-              _FeatureItem(
-                icon: Icons.calendar_today,
+              // New pill-style feature buttons:
+              _PillButton(
+                assetPath: 'assets/calendar_home.png',
                 title: 'Kalender',
                 subtitle: 'Einsehen von Belegen anhand des Datum',
               ),
-              Container(height: 1, color: Colors.purple.shade400),
-              _FeatureItem(
-                icon: Icons.folder,
+              const SizedBox(height: 12),
+              _PillButton(
+                assetPath: 'assets/folder_home.png',
                 title: 'Ordner',
                 subtitle: 'Einsehen von Belegen in einem Ordner',
               ),
-              Container(height: 1, color: Colors.purple.shade400),
-              _FeatureItem(
-                icon: Icons.history,
+              const SizedBox(height: 12),
+              _PillButton(
+                assetPath: 'assets/time_home.png',
                 title: 'Zuletzt geöffnet',
                 subtitle: 'Einsehen des zuletzt geöffneten Beleg',
               ),
@@ -147,10 +142,8 @@ class _YearButton extends StatelessWidget {
       onPressed: () {},
       style: OutlinedButton.styleFrom(
         side: const BorderSide(color: Colors.black, width: 2),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8)),
-        padding:
-        const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
       ),
       child: Text(
         '$year',
@@ -160,31 +153,58 @@ class _YearButton extends StatelessWidget {
   }
 }
 
-class _FeatureItem extends StatelessWidget {
-  final IconData icon;
+class _PillButton extends StatelessWidget {
+  final String assetPath;
   final String title;
   final String subtitle;
-  const _FeatureItem({
-    required this.icon,
+  const _PillButton({
+    required this.assetPath,
     required this.title,
     required this.subtitle,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: Icon(icon, size: 32, color: Colors.purple.shade400),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontWeight: FontWeight.bold,
-          color: Colors.black,
+    return Material(
+      color: Colors.grey.shade100,  // leicht grauer Weißton
+      borderRadius: BorderRadius.circular(12),
+      elevation: 2,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {},
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          child: Row(
+            children: [
+              Image.asset(assetPath, width: 32, height: 32),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black.withAlpha(204),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
         ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(color: Colors.black.withOpacity(0.8)),
       ),
     );
   }

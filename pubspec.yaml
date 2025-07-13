@@ -22,3 +22,6 @@ flutter:
 
   assets:
     - assets/Pfeil_Back.png
+    - assets/calendar_home.png
+    - assets/folder_home.png
+    - assets/time_home.png
