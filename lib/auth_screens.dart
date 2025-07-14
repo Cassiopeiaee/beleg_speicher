@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:beleg_speicher/home_page.dart'; // passt den Pfad an dein Projekt an
+import 'package:beleg_speicher/home_page.dart'; // Pfad zu deiner HomePage
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -23,7 +23,7 @@ class _LoginPageState extends State<LoginPage> {
       // Nach erfolgreicher Anmeldung zur HomePage wechseln:
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const HomePage(
+          builder: (_) => HomePage(               // kein const hier
             firstName: 'Vorname',
             lastName: 'Nachname',
           ),
@@ -68,13 +68,11 @@ class _LoginPageState extends State<LoginPage> {
                     borderSide: BorderSide(color: Colors.black),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                        color: Colors.purple.shade400, width: 2),
+                    borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
                   ),
                 ),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) =>
-                (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
+                validator: (v) => (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
                 onSaved: (v) => _email = v!.trim(),
               ),
               const SizedBox(height: 16),
@@ -90,14 +88,11 @@ class _LoginPageState extends State<LoginPage> {
                     borderSide: BorderSide(color: Colors.black),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                        color: Colors.purple.shade400, width: 2),
+                    borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
                   ),
                 ),
                 obscureText: true,
-                validator: (v) => (v != null && v.length >= 6)
-                    ? null
-                    : 'Mindestens 6 Zeichen',
+                validator: (v) => (v != null && v.length >= 6) ? null : 'Mindestens 6 Zeichen',
                 onSaved: (v) => _password = v!,
               ),
               const SizedBox(height: 32),
@@ -106,27 +101,19 @@ class _LoginPageState extends State<LoginPage> {
                 child: ElevatedButton(
                   onPressed: _submit,
                   style: ButtonStyle(
-                    backgroundColor:
-                    MaterialStateProperty.resolveWith<Color>(
-                            (states) {
-                          if (states.contains(MaterialState.pressed)) {
-                            return Colors.purple.shade700;
-                          }
-                          return Colors.purple.shade400;
-                        }),
-                    overlayColor: MaterialStateProperty.all(
-                        Colors.white.withOpacity(0.2)),
-                    padding: MaterialStateProperty.all(
-                      const EdgeInsets.symmetric(
-                          vertical: 16, horizontal: 32),
-                    ),
+                    backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                      if (states.contains(MaterialState.pressed)) {
+                        return Colors.purple.shade700;
+                      }
+                      return Colors.purple.shade400;
+                    }),
+                    overlayColor: MaterialStateProperty.all(Colors.white.withOpacity(0.2)),
+                    padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 16, horizontal: 32)),
                     shape: MaterialStateProperty.all(
-                      RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  child: const Text('Einloggen',
-                      style: TextStyle(color: Colors.white)),
+                  child: const Text('Einloggen', style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -159,7 +146,7 @@ class _RegisterPageState extends State<RegisterPage> {
       // Nach erfolgreicher Registrierung zur HomePage wechseln:
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => const HomePage(
+          builder: (_) => HomePage(             // kein const hier
             firstName: 'Vorname',
             lastName: 'Nachname',
           ),
@@ -172,15 +159,13 @@ class _RegisterPageState extends State<RegisterPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Registrieren',
-            style: TextStyle(color: Colors.black)),
+        title: const Text('Registrieren', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
           icon: Transform.scale(
             scale: 1.3,
-            child: Image.asset('assets/Pfeil_Back.png',
-                width: 24, height: 24),
+            child: Image.asset('assets/Pfeil_Back.png', width: 24, height: 24),
           ),
           onPressed: () => Navigator.of(context).pop(),
           splashRadius: 24,
@@ -206,13 +191,11 @@ class _RegisterPageState extends State<RegisterPage> {
                     borderSide: BorderSide(color: Colors.black),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                        color: Colors.purple.shade400, width: 2),
+                    borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
                   ),
                 ),
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) =>
-                (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
+                validator: (v) => (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
                 onSaved: (v) => _email = v!.trim(),
               ),
               const SizedBox(height: 16),
@@ -228,14 +211,11 @@ class _RegisterPageState extends State<RegisterPage> {
                     borderSide: BorderSide(color: Colors.black),
                   ),
                   focusedBorder: UnderlineInputBorder(
-                    borderSide: BorderSide(
-                        color: Colors.purple.shade400, width: 2),
+                    borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
                   ),
                 ),
                 obscureText: true,
-                validator: (v) => (v != null && v.length >= 6)
-                    ? null
-                    : 'Mindestens 6 Zeichen',
+                validator: (v) => (v != null && v.length >= 6) ? null : 'Mindestens 6 Zeichen',
                 onSaved: (v) => _password = v!,
               ),
               const SizedBox(height: 32),
@@ -244,27 +224,19 @@ class _RegisterPageState extends State<RegisterPage> {
                 child: ElevatedButton(
                   onPressed: _submit,
                   style: ButtonStyle(
-                    backgroundColor:
-                    MaterialStateProperty.resolveWith<Color>(
-                            (states) {
-                          if (states.contains(MaterialState.pressed)) {
-                            return Colors.purple.shade700;
-                          }
-                          return Colors.purple.shade400;
-                        }),
-                    overlayColor: MaterialStateProperty.all(
-                        Colors.white.withOpacity(0.2)),
-                    padding: MaterialStateProperty.all(
-                      const EdgeInsets.symmetric(
-                          vertical: 16, horizontal: 32),
-                    ),
+                    backgroundColor: MaterialStateProperty.resolveWith<Color>((states) {
+                      if (states.contains(MaterialState.pressed)) {
+                        return Colors.purple.shade700;
+                      }
+                      return Colors.purple.shade400;
+                    }),
+                    overlayColor: MaterialStateProperty.all(Colors.white.withOpacity(0.2)),
+                    padding: MaterialStateProperty.all(const EdgeInsets.symmetric(vertical: 16, horizontal: 32)),
                     shape: MaterialStateProperty.all(
-                      RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+                      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
-                  child: const Text('Konto erstellen',
-                      style: TextStyle(color: Colors.white)),
+                  child: const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
                 ),
               ),
             ],

@@ -5,7 +5,14 @@ class HomePage extends StatelessWidget {
   final String firstName;
   final String lastName;
 
-  const HomePage({
+  // Jahresliste als final-Feld, wird zur Laufzeit erzeugt
+  final List<int> _years = List<int>.generate(
+    10,
+        (index) => DateTime.now().year - index,
+  );
+
+  // Hier kein `const` mehr:
+  HomePage({
     super.key,
     required this.firstName,
     required this.lastName,
@@ -33,121 +40,115 @@ class HomePage extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // TODO: Hinzufügen-Action
-        },
+        onPressed: () { /* TODO: Hinzufügen-Action */ },
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Herzlich Willkommen',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(color: Colors.black),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              'Herzlich Willkommen',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.black),
+            ),
+            Text(
+              '$firstName $lastName',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
               ),
-              Text(
-                '$firstName $lastName',
-                style: Theme.of(context)
-                    .textTheme
-                    .headlineSmall
-                    ?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+            ),
+            const SizedBox(height: 4),
+            Container(
+              height: 2,
+              color: Colors.purple.shade400,
+              margin: const EdgeInsets.only(bottom: 16),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: const TextField(
+                decoration: InputDecoration(
+                  icon: Icon(Icons.search, color: Colors.purple),
+                  hintText: 'Suche',
+                  hintStyle: TextStyle(color: Colors.black87),
+                  border: InputBorder.none,
                 ),
+                style: TextStyle(color: Colors.black),
               ),
-              const SizedBox(height: 4),
-              Container(
-                height: 2,
-                color: Colors.purple.shade400,
-                margin: const EdgeInsets.only(bottom: 16),
+            ),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _years.map((year) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _YearPillButton(year: year),
+                  );
+                }).toList(),
               ),
-              // Search Bar
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: const TextField(
-                  decoration: InputDecoration(
-                    icon: Icon(Icons.search, color: Colors.purple),
-                    hintText: 'Suche',
-                    hintStyle: TextStyle(color: Colors.black87),
-                    border: InputBorder.none,
-                  ),
-                  style: TextStyle(color: Colors.black),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Year Buttons (horizontal scroll)
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: List.generate(
-                    10,
-                        (index) {
-                      final year = DateTime.now().year - index;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 16.0),
-                        child: _YearButton(year: year),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(height: 2, color: Colors.purple.shade400),
-              const SizedBox(height: 16),
-              // New pill-style feature buttons:
-              _PillButton(
-                assetPath: 'assets/calendar_home.png',
-                title: 'Kalender',
-                subtitle: 'Einsehen von Belegen anhand des Datum',
-              ),
-              const SizedBox(height: 12),
-              _PillButton(
-                assetPath: 'assets/folder_home.png',
-                title: 'Ordner',
-                subtitle: 'Einsehen von Belegen in einem Ordner',
-              ),
-              const SizedBox(height: 12),
-              _PillButton(
-                assetPath: 'assets/time_home.png',
-                title: 'Zuletzt geöffnet',
-                subtitle: 'Einsehen des zuletzt geöffneten Beleg',
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            Container(height: 2, color: Colors.purple.shade400),
+            const SizedBox(height: 16),
+            _PillButton(
+              assetPath: 'assets/calendar_home.png',
+              title: 'Kalender',
+              subtitle: 'Einsehen von Belegen anhand des Datum',
+            ),
+            const SizedBox(height: 12),
+            _PillButton(
+              assetPath: 'assets/folder_home.png',
+              title: 'Ordner',
+              subtitle: 'Einsehen von Belegen in einem Ordner',
+            ),
+            const SizedBox(height: 12),
+            _PillButton(
+              assetPath: 'assets/time_home.png',
+              title: 'Zuletzt geöffnet',
+              subtitle: 'Einsehen des zuletzt geöffneten Beleg',
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _YearButton extends StatelessWidget {
+class _YearPillButton extends StatelessWidget {
   final int year;
-  const _YearButton({required this.year});
+  const _YearPillButton({required this.year});
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: () {},
-      style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: Colors.black, width: 2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
-      ),
-      child: Text(
-        '$year',
-        style: const TextStyle(color: Colors.black),
+    return Material(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () {},
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+          child: Text(
+            '$year',
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -166,7 +167,7 @@ class _PillButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.grey.shade100,  // leicht grauer Weißton
+      color: Colors.grey.shade100,
       borderRadius: BorderRadius.circular(12),
       elevation: 2,
       child: InkWell(
