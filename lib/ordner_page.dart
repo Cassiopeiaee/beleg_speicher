@@ -1,0 +1,406 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:beleg_speicher/LandingPage.dart';
+import 'package:beleg_speicher/inside_ordner.dart';
+
+class OrdnerPage extends StatefulWidget {
+  const OrdnerPage({super.key});
+
+  @override
+  State<OrdnerPage> createState() => _OrdnerPageState();
+}
+
+class _OrdnerPageState extends State<OrdnerPage> {
+  static const _prefsFoldersKey = 'saved_folders';
+  static const _prefsGroupsKey = 'saved_groups';
+
+  List<String> _folders = [];
+  Map<String, List<String>> _groups = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedFolders = prefs.getStringList(_prefsFoldersKey);
+    if (savedFolders != null && savedFolders.isNotEmpty) {
+      _folders = List.from(savedFolders);
+    } else {
+      _folders = ['2025', '2024'];
+    }
+    final groupsJson = prefs.getString(_prefsGroupsKey);
+    if (groupsJson != null) {
+      final decoded = jsonDecode(groupsJson) as Map<String, dynamic>;
+      _groups = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+    }
+    setState(() {});
+  }
+
+  Future<void> _saveAll() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsFoldersKey, _folders);
+    await prefs.setString(_prefsGroupsKey, jsonEncode(_groups));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ordner', style: TextStyle(color: Colors.black)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+          splashRadius: 24,
+        ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAddOptions,
+        backgroundColor: Colors.purple.shade400,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // Suchfeld
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: const TextField(
+                  decoration: InputDecoration(
+                    icon: Icon(Icons.search, color: Colors.purple),
+                    hintText: 'Suche Ordner',
+                    hintStyle: TextStyle(color: Colors.black87),
+                    border: InputBorder.none,
+                  ),
+                  style: TextStyle(color: Colors.black),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Gruppen + ungruppierte Ordner
+              Expanded(
+                child: ListView(
+                  children: [
+                    // Gruppen
+                    for (var entry in _groups.entries)
+                      ExpansionTile(
+                        title: Text(
+                          entry.key,
+                          style: const TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        iconColor: Colors.black,
+                        collapsedIconColor: Colors.black,
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            setState(() => _groups.remove(entry.key));
+                            _saveAll();
+                          },
+                        ),
+                        children: [
+                          for (var name in entry.value)
+                            GestureDetector(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      InsideOrdnerPage(folderName: name),
+                                ),
+                              ),
+                              child: _FolderTile(
+                                name: name,
+                                onRename: () =>
+                                    _showFolderDialog(original: name),
+                                onGroup: null,
+                                onRemoveFromGroup: () {
+                                  setState(() {
+                                    entry.value.remove(name);
+                                    _folders.add(name);
+                                  });
+                                  _saveAll();
+                                },
+                                onDelete: () {
+                                  setState(() => entry.value.remove(name));
+                                  _saveAll();
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+
+                    // Ungruppierte
+                    if (_folders.isNotEmpty) ...[
+                      const Divider(thickness: 2, color: Colors.purple),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                          'Nicht zugeordnet',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                    // Ungruppierte Ordner
+                    for (var name in _folders)
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                InsideOrdnerPage(folderName: name),
+                          ),
+                        ),
+                        child: _FolderTile(
+                          name: name,
+                          onRename: () =>
+                              _showFolderDialog(original: name),
+                          onGroup: () => _showAssignGroup(name),
+                          onRemoveFromGroup: null,
+                          onDelete: () {
+                            setState(() => _folders.remove(name));
+                            _saveAll();
+                          },
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            leading: const Icon(Icons.group_add),
+            title: const Text('Gruppe erstellen'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showGroupDialog();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.create_new_folder),
+            title: const Text('Ordner erstellen'),
+            onTap: () {
+              Navigator.of(context).pop();
+              _showFolderDialog();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.file_upload),
+            title: const Text('Ordner importieren'),
+            onTap: () => Navigator.of(context).pop(),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  void _showGroupDialog() {
+    final controller = TextEditingController();
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Gruppe erstellen'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.black),
+          decoration: InputDecoration(
+            labelText: 'Gruppen-Name',
+            labelStyle: const TextStyle(color: Colors.black),
+            border: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            focusedBorder: UnderlineInputBorder(
+                borderSide:
+                BorderSide(color: Colors.purple.shade400, width: 2)),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Abbrechen')),
+          ElevatedButton(
+            onPressed: () {
+              final name = controller.text.trim();
+              if (name.isNotEmpty && !_groups.containsKey(name)) {
+                setState(() => _groups[name] = []);
+                _saveAll();
+              }
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade400),
+            child:
+            const Text('Erstellen', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFolderDialog({String? original}) {
+    final isRename = original != null;
+    final controller = TextEditingController(text: original ?? '');
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title:
+        Text(isRename ? 'Ordner umbenennen' : 'Ordner erstellen'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.black),
+          decoration: InputDecoration(
+            labelText: 'Name',
+            labelStyle: const TextStyle(color: Colors.black),
+            border: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            focusedBorder: UnderlineInputBorder(
+                borderSide:
+                BorderSide(color: Colors.purple.shade400, width: 2)),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Abbrechen')),
+          ElevatedButton(
+            onPressed: () {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                setState(() {
+                  if (isRename) {
+                    if (_folders.contains(original)) {
+                      final i = _folders.indexOf(original!);
+                      _folders[i] = newName;
+                    } else {
+                      for (var list in _groups.values) {
+                        final idx = list.indexOf(original!);
+                        if (idx != -1) list[idx] = newName;
+                      }
+                    }
+                  } else {
+                    _folders.insert(0, newName);
+                  }
+                });
+                _saveAll();
+              }
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade400),
+            child: Text(isRename ? 'Umbenennen' : 'Bestätigen',
+                style: const TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAssignGroup(String folderName) {
+    showModalBottomSheet<void>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (var groupName in _groups.keys)
+            ListTile(
+              title: Text(groupName),
+              onTap: () {
+                setState(() {
+                  _folders.remove(folderName);
+                  _groups[groupName]!.add(folderName);
+                });
+                _saveAll();
+                Navigator.of(context).pop();
+              },
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+class _FolderTile extends StatelessWidget {
+  final String name;
+  final VoidCallback onRename;
+  final VoidCallback? onGroup;
+  final VoidCallback? onRemoveFromGroup;
+  final VoidCallback? onDelete;
+
+  const _FolderTile({
+    required this.name,
+    required this.onRename,
+    this.onGroup,
+    this.onRemoveFromGroup,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.grey.shade100,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 2,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+        child: Row(
+          children: [
+            Image.asset('assets/folder_home.png', width: 32, height: 32),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                name,
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ),
+            if (onRemoveFromGroup != null)
+              IconButton(
+                icon: const Icon(Icons.remove_circle, color: Colors.red),
+                onPressed: onRemoveFromGroup,
+              ),
+            IconButton(
+              icon: const Icon(Icons.group, color: Colors.purple),
+              onPressed: onGroup,
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.grey),
+              onPressed: onRename,
+              splashRadius: 24,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.black54),
+              onPressed: onDelete,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

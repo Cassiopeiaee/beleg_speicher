@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:beleg_speicher/LandingPage.dart';
+import 'package:beleg_speicher/ordner_page.dart'; // neu: import
 
 class HomePage extends StatelessWidget {
   final String firstName;
   final String lastName;
 
-  // Jahresliste als final-Feld, wird zur Laufzeit erzeugt
+  // Jahresliste einmalig
   final List<int> _years = List<int>.generate(
     10,
-        (index) => DateTime.now().year - index,
+        (i) => DateTime.now().year - i,
   );
 
-  // Hier kein `const` mehr:
   HomePage({
     super.key,
     required this.firstName,
@@ -40,7 +40,7 @@ class HomePage extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () { /* TODO: Hinzufügen-Action */ },
+        onPressed: () {},
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
@@ -61,10 +61,7 @@ class HomePage extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall
-                  ?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Colors.black,
-              ),
+                  ?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
             ),
             const SizedBox(height: 4),
             Container(
@@ -72,6 +69,7 @@ class HomePage extends StatelessWidget {
               color: Colors.purple.shade400,
               margin: const EdgeInsets.only(bottom: 16),
             ),
+            // Search Bar
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey.shade200,
@@ -89,36 +87,47 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // Year-Pills
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: _years.map((year) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: _YearPillButton(year: year),
-                  );
-                }).toList(),
+                children: _years.map((y) => Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _YearPillButton(year: y),
+                )).toList(),
               ),
             ),
             const SizedBox(height: 16),
             Container(height: 2, color: Colors.purple.shade400),
             const SizedBox(height: 16),
+            // Feature Pills
             _PillButton(
               assetPath: 'assets/calendar_home.png',
               title: 'Kalender',
               subtitle: 'Einsehen von Belegen anhand des Datum',
+              onTap: () {
+                // noch keine Verbindung
+              },
             ),
             const SizedBox(height: 12),
             _PillButton(
               assetPath: 'assets/folder_home.png',
               title: 'Ordner',
               subtitle: 'Einsehen von Belegen in einem Ordner',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const OrdnerPage()),
+                );
+              },
             ),
             const SizedBox(height: 12),
             _PillButton(
               assetPath: 'assets/time_home.png',
               title: 'Zuletzt geöffnet',
               subtitle: 'Einsehen des zuletzt geöffneten Beleg',
+              onTap: () {
+                // noch keine Verbindung
+              },
             ),
           ],
         ),
@@ -143,10 +152,7 @@ class _YearPillButton extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           child: Text(
             '$year',
-            style: const TextStyle(
-              color: Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
+            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
           ),
         ),
       ),
@@ -158,10 +164,13 @@ class _PillButton extends StatelessWidget {
   final String assetPath;
   final String title;
   final String subtitle;
+  final VoidCallback? onTap;
+
   const _PillButton({
     required this.assetPath,
     required this.title,
     required this.subtitle,
+    this.onTap,
   });
 
   @override
@@ -172,7 +181,7 @@ class _PillButton extends StatelessWidget {
       elevation: 2,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {},
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
           child: Row(
@@ -183,21 +192,13 @@ class _PillButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black.withAlpha(204),
-                      ),
+                      style: TextStyle(fontSize: 14, color: Colors.black.withAlpha(204)),
                     ),
                   ],
                 ),
