@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:intl/intl.dart';
 import 'package:beleg_speicher/LandingPage.dart';
 
 class InsideOrdnerPage extends StatefulWidget {
@@ -19,6 +20,7 @@ class InsideOrdnerPage extends StatefulWidget {
 
 class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   static const _prefsDocsPrefix = 'docs_';
+  static const _prefsEventsKey = 'calendar_events';
   List<String> _docs = [];
 
   @override
@@ -29,7 +31,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
 
   Future<void> _loadDocs() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('$_prefsDocsPrefix${widget.folderName}');
+    final saved =
+    prefs.getStringList('$_prefsDocsPrefix${widget.folderName}');
     setState(() {
       _docs = saved ?? [];
     });
@@ -43,11 +46,48 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     );
   }
 
+  Future<void> _addCalendarEvent() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsEventsKey);
+    final Map<String, dynamic> decoded =
+    raw != null ? jsonDecode(raw) as Map<String, dynamic> : {};
+    final events = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    events[today] = (events[today] ?? []);
+    if (!events[today]!.contains(widget.folderName)) {
+      events[today]!.add(widget.folderName);
+    }
+    await prefs.setString(_prefsEventsKey, jsonEncode(events));
+  }
+
+  Future<void> _importImage() async {
+    final picker = ImagePicker();
+    final XFile? image =
+    await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      setState(() => _docs.insert(0, image.path));
+      await _saveDocs();
+      await _addCalendarEvent();
+    }
+  }
+
+  Future<void> _importFile() async {
+    final typeGroup =
+    XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
+    final file = await openFile(acceptedTypeGroups: [typeGroup]);
+    if (file != null) {
+      setState(() => _docs.insert(0, file.path));
+      await _saveDocs();
+      await _addCalendarEvent();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.folderName, style: const TextStyle(color: Colors.black)),
+        title:
+        Text(widget.folderName, style: const TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -76,15 +116,17 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
               tileColor: Colors.grey.shade100,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
-              leading: const Icon(Icons.insert_drive_file, color: Colors.blue),
+              leading:
+              const Icon(Icons.insert_drive_file, color: Colors.blue),
               title: Text(name, style: const TextStyle(color: Colors.black)),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.visibility, color: Colors.purple),
+                    icon:
+                    const Icon(Icons.visibility, color: Colors.purple),
                     onPressed: () {
-                      // TODO: Viewer für Datei öffnen
+                      // TODO: Datei anzeigen
                     },
                   ),
                   IconButton(
@@ -121,29 +163,17 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
           ListTile(
             leading: const Icon(Icons.photo_library),
             title: const Text('Importieren aus Galerie'),
-            onTap: () async {
+            onTap: () {
               Navigator.of(context).pop();
-              final picker = ImagePicker();
-              final XFile? image =
-              await picker.pickImage(source: ImageSource.gallery);
-              if (image != null) {
-                setState(() => _docs.insert(0, image.path));
-                await _saveDocs();
-              }
+              _importImage();
             },
           ),
           ListTile(
             leading: const Icon(Icons.folder_open),
             title: const Text('Importieren aus Dokumente'),
-            onTap: () async {
+            onTap: () {
               Navigator.of(context).pop();
-              // Mit file_selector:
-              final typeGroup = XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
-              final file = await openFile(acceptedTypeGroups: [typeGroup]);
-              if (file != null) {
-                setState(() => _docs.insert(0, file.path));
-                await _saveDocs();
-              }
+              _importFile();
             },
           ),
         ]),

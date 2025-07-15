@@ -1,16 +1,23 @@
+// lib/home_page.dart
+
 import 'package:flutter/material.dart';
 import 'package:beleg_speicher/LandingPage.dart';
-import 'package:beleg_speicher/ordner_page.dart'; // neu: import
+import 'package:beleg_speicher/ordner_page.dart';
+import 'package:beleg_speicher/calendar.dart';
+import 'package:beleg_speicher/year_beleg.dart';
 
 class HomePage extends StatelessWidget {
   final String firstName;
   final String lastName;
 
-  // Jahresliste einmalig
-  final List<int> _years = List<int>.generate(
-    10,
-        (i) => DateTime.now().year - i,
-  );
+  // Ältestes Jahr festlegen
+  static const int _earliestYear = 2021;
+
+  // Getter statt festem Feld, so wächst die Liste automatisch mit neuem Jahr
+  List<int> get _years {
+    final current = DateTime.now().year;
+    return [for (var y = current; y >= _earliestYear; y--) y];
+  }
 
   HomePage({
     super.key,
@@ -51,17 +58,11 @@ class HomePage extends StatelessWidget {
           children: [
             Text(
               'Herzlich Willkommen',
+              textAlign: TextAlign.center,
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall
                   ?.copyWith(color: Colors.black),
-            ),
-            Text(
-              '$firstName $lastName',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
             ),
             const SizedBox(height: 4),
             Container(
@@ -69,7 +70,7 @@ class HomePage extends StatelessWidget {
               color: Colors.purple.shade400,
               margin: const EdgeInsets.only(bottom: 16),
             ),
-            // Search Bar
+            // Suchfeld
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey.shade200,
@@ -87,26 +88,39 @@ class HomePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
-            // Year-Pills
+            // Jahres-Pill-Buttons
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: _years.map((y) => Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _YearPillButton(year: y),
-                )).toList(),
+                children: _years.map((y) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _YearPillButton(
+                      year: y,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => YearBelegPage(year: y),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                }).toList(),
               ),
             ),
             const SizedBox(height: 16),
             Container(height: 2, color: Colors.purple.shade400),
             const SizedBox(height: 16),
-            // Feature Pills
+            // Feature-Pills
             _PillButton(
               assetPath: 'assets/calendar_home.png',
               title: 'Kalender',
               subtitle: 'Einsehen von Belegen anhand des Datum',
               onTap: () {
-                // noch keine Verbindung
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const CalendarPage()),
+                );
               },
             ),
             const SizedBox(height: 12),
@@ -126,7 +140,7 @@ class HomePage extends StatelessWidget {
               title: 'Zuletzt geöffnet',
               subtitle: 'Einsehen des zuletzt geöffneten Beleg',
               onTap: () {
-                // noch keine Verbindung
+                // später implementieren
               },
             ),
           ],
@@ -138,7 +152,8 @@ class HomePage extends StatelessWidget {
 
 class _YearPillButton extends StatelessWidget {
   final int year;
-  const _YearPillButton({required this.year});
+  final VoidCallback onTap;
+  const _YearPillButton({required this.year, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -147,12 +162,15 @@ class _YearPillButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(8),
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () {},
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
           child: Text(
             '$year',
-            style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+            style: const TextStyle(
+              color: Colors.black,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
@@ -192,13 +210,21 @@ class _PillButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 14, color: Colors.black.withAlpha(204)),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black.withAlpha(204),
+                      ),
                     ),
                   ],
                 ),
