@@ -8,7 +8,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:intl/intl.dart';
-import 'package:beleg_speicher/LandingPage.dart';
+import 'package:open_file/open_file.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:cross_file/cross_file.dart';
 
 class InsideOrdnerPage extends StatefulWidget {
   final String folderName;
@@ -51,7 +53,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     final raw = prefs.getString(_prefsEventsKey);
     final Map<String, dynamic> decoded =
     raw != null ? jsonDecode(raw) as Map<String, dynamic> : {};
-    final events = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+    final events =
+    decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     events[today] = (events[today] ?? []);
     if (!events[today]!.contains(widget.folderName)) {
@@ -82,6 +85,62 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     }
   }
 
+  Future<void> _renameDoc(int index) async {
+    final oldPath = _docs[index];
+    final oldName = File(oldPath).uri.pathSegments.last;
+    final controller = TextEditingController(text: oldName);
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Dokument umbenennen'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          style: const TextStyle(color: Colors.black),
+          decoration: InputDecoration(
+            labelText: 'Neuer Name',
+            labelStyle: const TextStyle(color: Colors.black),
+            border: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.black),
+            ),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.black),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide:
+              BorderSide(color: Colors.purple.shade400, width: 2),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newName = controller.text.trim();
+              if (newName.isNotEmpty) {
+                final dir = File(oldPath).parent.path;
+                final newPath = '$dir/$newName';
+                await File(oldPath).rename(newPath);
+                setState(() => _docs[index] = newPath);
+                await _saveDocs();
+              }
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purple.shade400,
+            ),
+            child: const Text('Umbenennen',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -100,7 +159,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
         onPressed: _showImportOptions,
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
+        label: const Text('Hinzufügen',
+            style: TextStyle(color: Colors.white)),
       ),
       body: SafeArea(
         child: _docs.isEmpty
@@ -118,23 +178,29 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
                   borderRadius: BorderRadius.circular(12)),
               leading:
               const Icon(Icons.insert_drive_file, color: Colors.blue),
-              title: Text(name, style: const TextStyle(color: Colors.black)),
+              title:
+              Text(name, style: const TextStyle(color: Colors.black)),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Datei öffnen
                   IconButton(
                     icon:
                     const Icon(Icons.visibility, color: Colors.purple),
-                    onPressed: () {
-                      // TODO: Datei anzeigen
-                    },
+                    onPressed: () => OpenFile.open(path),
                   ),
+                  // Datei teilen / herunterladen
                   IconButton(
-                    icon: const Icon(Icons.download, color: Colors.green),
-                    onPressed: () {
-                      // TODO: Datei herunterladen / teilen
-                    },
+                    icon:
+                    const Icon(Icons.download, color: Colors.green),
+                    onPressed: () => Share.shareXFiles([XFile(path)]),
                   ),
+                  // Datei umbenennen
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.grey),
+                    onPressed: () => _renameDoc(index),
+                  ),
+                  // Löschen
                   IconButton(
                     icon: const Icon(Icons.delete, color: Colors.red),
                     onPressed: () {
