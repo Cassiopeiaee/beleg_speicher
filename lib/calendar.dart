@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';    // ← Import
 import 'package:beleg_speicher/inside_ordner.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -19,11 +20,20 @@ class _CalendarPageState extends State<CalendarPage> {
   Map<DateTime, List<String>> _events = {};
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
+  bool _localeInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _loadEvents();
+    _initializeLocaleAndLoad();
+  }
+
+  Future<void> _initializeLocaleAndLoad() async {
+    // Lokale Datumssymbole für Deutsch initialisieren
+    await initializeDateFormatting('de', null);
+    setState(() => _localeInitialized = true);
+    // Events laden
+    await _loadEvents();
   }
 
   Future<void> _loadEvents() async {
@@ -34,7 +44,8 @@ class _CalendarPageState extends State<CalendarPage> {
       jsonDecode(raw) as Map<String, dynamic>;
       decoded.forEach((key, list) {
         final date = DateTime.parse(key);
-        _events[date] = List<String>.from(list);
+        _events[DateTime(date.year, date.month, date.day)] =
+        List<String>.from(list);
       });
     }
     setState(() {});
@@ -44,8 +55,53 @@ class _CalendarPageState extends State<CalendarPage> {
     return _events[DateTime(day.year, day.month, day.day)] ?? [];
   }
 
+  void _onDaySelected(DateTime selected, DateTime focused) {
+    setState(() {
+      _selectedDay = DateTime(selected.year, selected.month, selected.day);
+      _focusedDay = focused;
+    });
+  }
+
+  Widget _buildEventList() {
+    if (!_localeInitialized || _selectedDay == null) return const SizedBox.shrink();
+
+    final day = _selectedDay!;
+    final events = _getEventsForDay(day);
+    if (events.isEmpty) return const SizedBox.shrink();
+
+    final label = DateFormat.yMMMMd('de').format(day);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Card(
+        elevation: 2,
+        child: ExpansionTile(
+          title: Text('Uploads am $label'),
+          children: events.map((folderName) {
+            return ListTile(
+              title: Text(folderName),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => InsideOrdnerPage(folderName: folderName),
+                  ),
+                );
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (!_localeInitialized) {
+      // Noch keine Locale → Lade-Bildschirm
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kalender', style: TextStyle(color: Colors.black)),
@@ -58,51 +114,41 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: TableCalendar<String>(
-            firstDay: DateTime(2000),
-            lastDay: DateTime(2100),
-            focusedDay: _focusedDay,
-            selectedDayPredicate: (day) =>
-                isSameDay(_selectedDay, day),
-            eventLoader: _getEventsForDay,
-            onDaySelected: (selected, focused) {
-              final events = _getEventsForDay(selected);
-              if (events.isNotEmpty) {
-                // wir nehmen den ersten Ordner, können aber Liste anzeigen
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => InsideOrdnerPage(
-                      folderName: events.first,
-                    ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TableCalendar<String>(
+                firstDay: DateTime(2000),
+                lastDay: DateTime(2100),
+                focusedDay: _focusedDay,
+                selectedDayPredicate: (day) =>
+                _selectedDay != null && isSameDay(_selectedDay, day),
+                eventLoader: _getEventsForDay,
+                onDaySelected: _onDaySelected,
+                calendarStyle: const CalendarStyle(
+                  todayDecoration: BoxDecoration(
+                    color: Colors.purple,
+                    shape: BoxShape.circle,
                   ),
-                );
-              }
-              setState(() {
-                _selectedDay = selected;
-                _focusedDay = focused;
-              });
-            },
-            calendarStyle: const CalendarStyle(
-              todayDecoration: BoxDecoration(
-                color: Colors.purple,
-                shape: BoxShape.circle,
-              ),
-              selectedDecoration: BoxDecoration(
-                color: Colors.deepPurple,
-                shape: BoxShape.circle,
-              ),
-              markerDecoration: BoxDecoration(
-                color: Colors.pink,
-                shape: BoxShape.circle,
+                  selectedDecoration: BoxDecoration(
+                    color: Colors.deepPurple,
+                    shape: BoxShape.circle,
+                  ),
+                  markerDecoration: BoxDecoration(
+                    color: Colors.pink,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                headerStyle: const HeaderStyle(
+                  formatButtonVisible: false,
+                  titleCentered: true,
+                ),
               ),
             ),
-            headerStyle: const HeaderStyle(
-              formatButtonVisible: false,
-              titleCentered: true,
-            ),
-          ),
+            // Drop-down Liste der Dateien für den gewählten Tag
+            if (_selectedDay != null) _buildEventList(),
+          ],
         ),
       ),
     );

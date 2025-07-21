@@ -8,7 +8,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
 
-
 import 'package:beleg_speicher/LandingPage.dart';
 import 'package:beleg_speicher/ordner_page.dart';
 import 'package:beleg_speicher/calendar.dart';
@@ -64,7 +63,8 @@ class _HomePageState extends State<HomePage> {
           for (final path in paths) {
             final file = File(path);
             if (await file.exists()) {
-              final ref = storage.ref('backups/$folderName/${file.uri.pathSegments.last}');
+              final ref = storage
+                  .ref('backups/$folderName/${file.uri.pathSegments.last}');
               try {
                 await ref.putFile(file);
               } catch (e) {
@@ -94,7 +94,6 @@ class _HomePageState extends State<HomePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Öffne zuletzt geöffneten Beleg: $fileName')),
       );
-      // Öffne die Datei
       await OpenFile.open(path);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -123,14 +122,6 @@ class _HomePageState extends State<HomePage> {
             },
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          // Import-Logik in OrdnerPage
-        },
-        backgroundColor: Colors.purple.shade400,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
       ),
       body: SafeArea(
         child: ListView(
