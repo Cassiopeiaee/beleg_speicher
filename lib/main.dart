@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
-// 1. richtigen Pfad zu deiner LandingPage-Datei verwenden:
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 import 'package:beleg_speicher/LandingPage.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const MyApp());
 }
 
@@ -16,15 +22,15 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme(
           brightness: Brightness.light,
-          primary: Colors.white,                  // ehemals background
-          onPrimary: Colors.purple.shade700,      // Text/Icon auf primary
+          primary: Colors.white,
+          onPrimary: Colors.purple.shade700,
           secondary: Colors.purple.shade400,
           onSecondary: Colors.white,
-          surface: Colors.white,                  // ersetzt background
-          onSurface: Colors.black,                // ersetzt onBackground
+          surface: Colors.white,
+          onSurface: Colors.black,
           error: Colors.red,
           onError: Colors.white,
-          background: Colors.white,               // kannst auch surface verwenden
+          background: Colors.white,
           onBackground: Colors.black,
         ),
         appBarTheme: AppBarTheme(
@@ -38,7 +44,6 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      // 2. hier deine LandingPage als Startseite setzen:
       home: const LandingPage(),
     );
   }

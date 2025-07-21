@@ -1,29 +1,92 @@
 // lib/home_page.dart
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:beleg_speicher/LandingPage.dart';
 import 'package:beleg_speicher/ordner_page.dart';
 import 'package:beleg_speicher/calendar.dart';
 import 'package:beleg_speicher/year_beleg.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   final String firstName;
   final String lastName;
-
-  // Ältestes Jahr festlegen
-  static const int _earliestYear = 2021;
-
-  // Getter statt festem Feld, so wächst die Liste automatisch mit neuem Jahr
-  List<int> get _years {
-    final current = DateTime.now().year;
-    return [for (var y = current; y >= _earliestYear; y--) y];
-  }
 
   HomePage({
     super.key,
     required this.firstName,
     required this.lastName,
   });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  static const _earliestYear = 2021;
+  static const _prefsCloudKey = 'cloud_sync_enabled';
+  bool _cloudEnabled = false;
+  late final List<int> _years;
+
+  @override
+  void initState() {
+    super.initState();
+    _years = [
+      for (int y = DateTime.now().year; y >= _earliestYear; y--) y,
+    ];
+    _loadCloudFlag();
+  }
+
+  Future<void> _loadCloudFlag() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _cloudEnabled = prefs.getBool(_prefsCloudKey) ?? false;
+    });
+  }
+
+  Future<void> _enableCloudSync() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!_cloudEnabled) {
+      // 1) Firebase initialisieren
+      await Firebase.initializeApp();
+      // 2) Alle bisherigen Dateien hochladen
+      final storage = FirebaseStorage.instance;
+      // Keys in SharedPreferences mit 'docs_<folder>' sammeln
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('docs_')) {
+          final folderName = key.substring(5);
+          final paths = prefs.getStringList(key) ?? [];
+          for (final path in paths) {
+            final file = File(path);
+            if (await file.exists()) {
+              final ref = storage
+                  .ref('backups/$folderName/${file.uri.pathSegments.last}');
+              try {
+                await ref.putFile(file);
+              } catch (e) {
+                // Fehler einzelner Dateien protokollieren, aber weitermachen
+                debugPrint('Upload $path fehlgeschlagen: $e');
+              }
+            }
+          }
+        }
+      }
+      // 3) Flag setzen
+      await prefs.setBool(_prefsCloudKey, true);
+      setState(() => _cloudEnabled = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cloud-Sync aktiviert und alle Dateien gesichert')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cloud-Sync ist bereits aktiviert')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +110,9 @@ class HomePage extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {},
+        onPressed: () {
+          // noch leer, Import-Logik sitzt in OrdnerPage
+        },
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
@@ -140,8 +205,17 @@ class HomePage extends StatelessWidget {
               title: 'Zuletzt geöffnet',
               subtitle: 'Einsehen des zuletzt geöffneten Beleg',
               onTap: () {
-                // später implementieren
+                // hier könntest du später die InsideOrdnerPage für letzte 7 Tage aufrufen
               },
+            ),
+            const SizedBox(height: 12),
+            _PillButton(
+              assetPath: 'assets/cloud_server.png',
+              title: _cloudEnabled ? 'Cloud-Sync aktiviert' : 'Cloud-Speicher',
+              subtitle: _cloudEnabled
+                  ? 'Alle Dateien in der Cloud gesichert'
+                  : 'Erstmalige Sicherung in die Cloud',
+              onTap: _enableCloudSync,
             ),
           ],
         ),
@@ -210,21 +284,16 @@ class _PillButton extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black)),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
                       style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black.withAlpha(204),
-                      ),
+                          fontSize: 14, color: Colors.black.withAlpha(204)),
                     ),
                   ],
                 ),
