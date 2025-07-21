@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:open_file/open_file.dart';
+
 
 import 'package:beleg_speicher/LandingPage.dart';
 import 'package:beleg_speicher/ordner_page.dart';
@@ -16,7 +18,7 @@ class HomePage extends StatefulWidget {
   final String firstName;
   final String lastName;
 
-  HomePage({
+  const HomePage({
     super.key,
     required this.firstName,
     required this.lastName,
@@ -29,6 +31,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _earliestYear = 2021;
   static const _prefsCloudKey = 'cloud_sync_enabled';
+  static const _prefsLastOpened = 'last_opened_doc';
+
   bool _cloudEnabled = false;
   late final List<int> _years;
 
@@ -51,11 +55,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _enableCloudSync() async {
     final prefs = await SharedPreferences.getInstance();
     if (!_cloudEnabled) {
-      // 1) Firebase initialisieren
       await Firebase.initializeApp();
-      // 2) Alle bisherigen Dateien hochladen
       final storage = FirebaseStorage.instance;
-      // Keys in SharedPreferences mit 'docs_<folder>' sammeln
       for (final key in prefs.getKeys()) {
         if (key.startsWith('docs_')) {
           final folderName = key.substring(5);
@@ -63,19 +64,16 @@ class _HomePageState extends State<HomePage> {
           for (final path in paths) {
             final file = File(path);
             if (await file.exists()) {
-              final ref = storage
-                  .ref('backups/$folderName/${file.uri.pathSegments.last}');
+              final ref = storage.ref('backups/$folderName/${file.uri.pathSegments.last}');
               try {
                 await ref.putFile(file);
               } catch (e) {
-                // Fehler einzelner Dateien protokollieren, aber weitermachen
                 debugPrint('Upload $path fehlgeschlagen: $e');
               }
             }
           }
         }
       }
-      // 3) Flag setzen
       await prefs.setBool(_prefsCloudKey, true);
       setState(() => _cloudEnabled = true);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -84,6 +82,23 @@ class _HomePageState extends State<HomePage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cloud-Sync ist bereits aktiviert')),
+      );
+    }
+  }
+
+  Future<void> _openLastOpened() async {
+    final prefs = await SharedPreferences.getInstance();
+    final path = prefs.getString(_prefsLastOpened);
+    if (path != null && await File(path).exists()) {
+      final fileName = path.split(Platform.pathSeparator).last;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Öffne zuletzt geöffneten Beleg: $fileName')),
+      );
+      // Öffne die Datei
+      await OpenFile.open(path);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Kein zuletzt geöffneter Beleg gefunden')),
       );
     }
   }
@@ -111,7 +126,7 @@ class _HomePageState extends State<HomePage> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // noch leer, Import-Logik sitzt in OrdnerPage
+          // Import-Logik in OrdnerPage
         },
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
@@ -164,9 +179,7 @@ class _HomePageState extends State<HomePage> {
                       year: y,
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => YearBelegPage(year: y),
-                          ),
+                          MaterialPageRoute(builder: (_) => YearBelegPage(year: y)),
                         );
                       },
                     ),
@@ -203,10 +216,8 @@ class _HomePageState extends State<HomePage> {
             _PillButton(
               assetPath: 'assets/time_home.png',
               title: 'Zuletzt geöffnet',
-              subtitle: 'Einsehen des zuletzt geöffneten Beleg',
-              onTap: () {
-                // hier könntest du später die InsideOrdnerPage für letzte 7 Tage aufrufen
-              },
+              subtitle: 'Direkter Zugang zum zuletzt geöffneten Beleg',
+              onTap: _openLastOpened,
             ),
             const SizedBox(height: 12),
             _PillButton(
