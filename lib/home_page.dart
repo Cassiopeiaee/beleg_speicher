@@ -3,15 +3,21 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart';         // nötig für instanceFor
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
+
+// Firebase:
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:beleg_speicher/LandingPage.dart';
 import 'package:beleg_speicher/ordner_page.dart';
 import 'package:beleg_speicher/calendar.dart';
 import 'package:beleg_speicher/year_beleg.dart';
+
+const _kDbId = 'beleg-nutzer';
 
 class HomePage extends StatefulWidget {
   final String firstName;
@@ -35,6 +41,12 @@ class _HomePageState extends State<HomePage> {
   bool _cloudEnabled = false;
   late final List<int> _years;
 
+  // Firestore-Instanz auf eure DB-ID mappen
+  FirebaseFirestore get _firestore => FirebaseFirestore.instanceFor(
+    app: Firebase.app(),
+    databaseId: _kDbId,
+  );
+
   @override
   void initState() {
     super.initState();
@@ -54,26 +66,39 @@ class _HomePageState extends State<HomePage> {
   Future<void> _enableCloudSync() async {
     final prefs = await SharedPreferences.getInstance();
     if (!_cloudEnabled) {
-      await Firebase.initializeApp();
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+      final uid = user.uid;
+
       final storage = FirebaseStorage.instance;
+      final filesCol = _firestore
+          .collection('users')
+          .doc(uid)
+          .collection('files');
+
       for (final key in prefs.getKeys()) {
-        if (key.startsWith('docs_')) {
-          final folderName = key.substring(5);
-          final paths = prefs.getStringList(key) ?? [];
-          for (final path in paths) {
-            final file = File(path);
-            if (await file.exists()) {
-              final ref = storage
-                  .ref('backups/$folderName/${file.uri.pathSegments.last}');
-              try {
-                await ref.putFile(file);
-              } catch (e) {
-                debugPrint('Upload $path fehlgeschlagen: $e');
-              }
-            }
+        if (!key.startsWith('docs_')) continue;
+        final folderName = key.substring(5);
+        final paths = prefs.getStringList(key) ?? [];
+        for (final path in paths) {
+          final file = File(path);
+          if (!await file.exists()) continue;
+          final fileName = path.split(Platform.pathSeparator).last;
+          final ref = storage.ref('backups/$uid/$folderName/$fileName');
+          try {
+            await ref.putFile(file);
+            await filesCol.add({
+              'folder': folderName,
+              'fileName': fileName,
+              'uploadedAt': FieldValue.serverTimestamp(),
+              'storagePath': ref.fullPath,
+            });
+          } catch (e) {
+            debugPrint('Upload $path fehlgeschlagen: $e');
           }
         }
       }
+
       await prefs.setBool(_prefsCloudKey, true);
       setState(() => _cloudEnabled = true);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -294,8 +319,8 @@ class _PillButton extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(
-                          fontSize: 14, color: Colors.black.withAlpha(204)),
+                      style:
+                      TextStyle(fontSize: 14, color: Colors.black.withAlpha(204)),
                     ),
                   ],
                 ),

@@ -14,6 +14,12 @@ import 'package:cross_file/cross_file.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+// Firebase:
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class InsideOrdnerPage extends StatefulWidget {
   final String folderName;
   const InsideOrdnerPage({super.key, required this.folderName});
@@ -26,6 +32,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   static const _prefsDocsPrefix = 'docs_';
   static const _prefsEventsKey = 'calendar_events';
   static const _prefsLastOpened = 'last_opened_doc';
+  static const _prefsCloudKey = 'cloud_sync_enabled';
 
   List<String> _docs = [];
   String? _lastOpened;
@@ -70,6 +77,43 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     await prefs.setString(_prefsEventsKey, jsonEncode(events));
   }
 
+  Future<void> _maybeUploadToCloud(String localPath) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_prefsCloudKey) != true) return;
+
+    // Stelle sicher, dass Firebase initialisiert ist
+    await Firebase.initializeApp();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final uid = user.uid;
+    final file = File(localPath);
+    if (!await file.exists()) return;
+
+    final fileName = p.basename(localPath);
+    final storageRef = FirebaseStorage.instance
+        .ref('backups/$uid/${widget.folderName}/$fileName');
+
+    try {
+      final uploadTask = storageRef.putFile(file);
+      await uploadTask;
+
+      // Metadaten in Firestore speichern
+      final filesCol = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('files');
+      await filesCol.add({
+        'folder': widget.folderName,
+        'fileName': fileName,
+        'uploadedAt': FieldValue.serverTimestamp(),
+        'storagePath': storageRef.fullPath,
+      });
+    } catch (e) {
+      debugPrint('Cloud-Upload $localPath fehlgeschlagen: $e');
+    }
+  }
+
   Future<void> _importImage() async {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
@@ -77,6 +121,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
       setState(() => _docs.insert(0, image.path));
       await _saveDocs();
       await _addCalendarEvent();
+      await _maybeUploadToCloud(image.path);
     }
   }
 
@@ -87,6 +132,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
       setState(() => _docs.insert(0, file.path));
       await _saveDocs();
       await _addCalendarEvent();
+      await _maybeUploadToCloud(file.path);
     }
   }
 
@@ -125,6 +171,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
                 setState(() => _docs[index] = newPath);
                 await _saveDocs();
                 await _addCalendarEvent();
+                await _maybeUploadToCloud(newPath);
               }
               Navigator.of(context).pop();
             },
@@ -179,15 +226,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   }
 
   Future<void> _openDoc(String path) async {
-    // Markiere als zuletzt geöffnet
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsLastOpened, path);
     setState(() => _lastOpened = path);
-
-    // Kalender-Eintrag
     await _addCalendarEvent();
-
-    // Öffne Datei
     await OpenFile.open(path);
   }
 
@@ -239,25 +281,13 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
               leading: const Icon(Icons.insert_drive_file, color: Colors.blue),
               title: Text(name, style: const TextStyle(color: Colors.black)),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(
-                  icon: const Icon(Icons.visibility, color: Colors.purple),
-                  onPressed: () => _openDoc(path),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download, color: Colors.green),
-                  onPressed: () => Share.shareXFiles([XFile(path)]),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.edit, color: Colors.grey),
-                  onPressed: () => _renameDoc(index),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () {
-                    setState(() => _docs.removeAt(index));
-                    _saveDocs();
-                  },
-                ),
+                IconButton(icon: const Icon(Icons.visibility, color: Colors.purple), onPressed: () => _openDoc(path)),
+                IconButton(icon: const Icon(Icons.download, color: Colors.green), onPressed: () => Share.shareXFiles([XFile(path)])),
+                IconButton(icon: const Icon(Icons.edit, color: Colors.grey), onPressed: () => _renameDoc(index)),
+                IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
+                  setState(() => _docs.removeAt(index));
+                  _saveDocs();
+                }),
               ]),
             );
           },

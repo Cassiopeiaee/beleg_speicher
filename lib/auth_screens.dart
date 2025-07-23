@@ -58,12 +58,29 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   String _email = '', _password = '';
 
+  /// Lege in Firestore unter users/{uid} ein Profil an, falls noch nicht vorhanden.
+  Future<void> _ensureUserDoc(User user, String provider) async {
+    final doc = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final snap = await doc.get();
+    if (!snap.exists) {
+      await doc.set({
+        'email': user.email,
+        'createdAt': FieldValue.serverTimestamp(),
+        'provider': provider,
+      });
+    }
+  }
+
   Future<void> _emailLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
     try {
       final cred = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: _email, password: _password);
+
+      // Firestore-Profil prüfen/erstellen
+      await _ensureUserDoc(cred.user!, 'password');
+
       _navigateToHome(cred.user!);
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context)
@@ -74,15 +91,10 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _googleLogin() async {
     try {
       final cred = await AuthHelpers.signInWithGoogle();
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(cred.user!.uid);
-      final snapshot = await userDoc.get();
-      if (!snapshot.exists) {
-        await userDoc.set({
-          'email': cred.user!.email,
-          'createdAt': FieldValue.serverTimestamp(),
-          'provider': 'google',
-        });
-      }
+
+      // Firestore-Profil prüfen/erstellen
+      await _ensureUserDoc(cred.user!, 'google');
+
       _navigateToHome(cred.user!);
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context)
@@ -113,7 +125,7 @@ class _LoginPageState extends State<LoginPage> {
           splashRadius: 24,
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(          // <-- verhindert Overflow
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
@@ -149,8 +161,7 @@ class _LoginPageState extends State<LoginPage> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Einloggen',
-                        style: TextStyle(color: Colors.white)),
+                    child: const Text('Einloggen', style: TextStyle(color: Colors.white)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -164,7 +175,6 @@ class _LoginPageState extends State<LoginPage> {
                       style: TextStyle(
                         color: Colors.blue,
                         decoration: TextDecoration.underline,
-                        decorationColor: Colors.blue,
                         fontSize: 16,
                       ),
                     ),
@@ -182,10 +192,7 @@ class _LoginPageState extends State<LoginPage> {
               Expanded(child: Divider()),
             ]),
             const SizedBox(height: 24),
-            GoogleAuthButton(
-              text: 'Mit Google anmelden',
-              onPressed: _googleLogin,
-            ),
+            GoogleAuthButton(text: 'Mit Google anmelden', onPressed: _googleLogin),
           ],
         ),
       ),
@@ -224,21 +231,30 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
+  /// derselbe Helper wie in LoginPage
+  Future<void> _ensureUserDoc(User user, String provider) async {
+    final doc = FirebaseFirestore.instance.collection('users').doc(user.uid);
+    final snap = await doc.get();
+    if (!snap.exists) {
+      await doc.set({
+        'email': user.email,
+        'createdAt': FieldValue.serverTimestamp(),
+        'provider': provider,
+      });
+    }
+  }
+
   Future<void> _emailRegister() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
     try {
-      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _email, password: _password);
-      final uid = cred.user!.uid;
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
-        'email': _email,
-        'createdAt': FieldValue.serverTimestamp(),
-        'provider': 'password',
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registrierung erfolgreich!')),
-      );
+      final cred = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: _email, password: _password);
+
+      // Firestore-Profil anlegen
+      await _ensureUserDoc(cred.user!, 'password');
+
+      // direkt weiterleiten
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => HomePage(firstName: _email, lastName: '')),
       );
@@ -252,15 +268,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _googleRegister() async {
     try {
       final cred = await AuthHelpers.signInWithGoogle();
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(cred.user!.uid);
-      final snapshot = await userDoc.get();
-      if (!snapshot.exists) {
-        await userDoc.set({
-          'email': cred.user!.email,
-          'createdAt': FieldValue.serverTimestamp(),
-          'provider': 'google',
-        });
-      }
+      await _ensureUserDoc(cred.user!, 'google');
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) =>
             HomePage(firstName: cred.user!.email ?? '', lastName: '')),
@@ -289,7 +297,7 @@ class _RegisterPageState extends State<RegisterPage> {
           splashRadius: 24,
         ),
       ),
-      body: Padding(
+      body: SingleChildScrollView(  // <-- verhindert Overflow
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
@@ -337,8 +345,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Konto erstellen',
-                        style: TextStyle(color: Colors.white)),
+                    child: const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ]),
@@ -353,10 +360,7 @@ class _RegisterPageState extends State<RegisterPage> {
               Expanded(child: Divider()),
             ]),
             const SizedBox(height: 24),
-            GoogleAuthButton(
-              text: 'Mit Google registrieren',
-              onPressed: _googleRegister,
-            ),
+            GoogleAuthButton(text: 'Mit Google registrieren', onPressed: _googleRegister),
           ],
         ),
       ),
