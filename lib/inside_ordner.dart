@@ -15,7 +15,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
 // Firebase:
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -46,8 +45,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
 
   Future<void> _loadDocs() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getStringList('$_prefsDocsPrefix${widget.folderName}');
-    setState(() => _docs = saved ?? []);
+    _docs = prefs.getStringList('$_prefsDocsPrefix${widget.folderName}') ?? [];
+    setState(() {});
   }
 
   Future<void> _saveDocs() async {
@@ -60,7 +59,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
 
   Future<void> _loadLastOpened() async {
     final prefs = await SharedPreferences.getInstance();
-    setState(() => _lastOpened = prefs.getString(_prefsLastOpened));
+    _lastOpened = prefs.getString(_prefsLastOpened);
+    setState(() {});
   }
 
   Future<void> _addCalendarEvent() async {
@@ -81,12 +81,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool(_prefsCloudKey) != true) return;
 
-    // Stelle sicher, dass Firebase initialisiert ist
-    await Firebase.initializeApp();
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     final uid = user.uid;
+
     final file = File(localPath);
     if (!await file.exists()) return;
 
@@ -95,8 +93,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
         .ref('backups/$uid/${widget.folderName}/$fileName');
 
     try {
-      final uploadTask = storageRef.putFile(file);
-      await uploadTask;
+      await storageRef.putFile(file);
 
       // Metadaten in Firestore speichern
       final filesCol = FirebaseFirestore.instance
@@ -118,10 +115,11 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     final picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() => _docs.insert(0, image.path));
+      _docs.insert(0, image.path);
       await _saveDocs();
       await _addCalendarEvent();
       await _maybeUploadToCloud(image.path);
+      setState(() {});
     }
   }
 
@@ -129,10 +127,11 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     final typeGroup = XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
     final file = await openFile(acceptedTypeGroups: [typeGroup]);
     if (file != null) {
-      setState(() => _docs.insert(0, file.path));
+      _docs.insert(0, file.path);
       await _saveDocs();
       await _addCalendarEvent();
       await _maybeUploadToCloud(file.path);
+      setState(() {});
     }
   }
 
@@ -148,19 +147,18 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.black),
           decoration: InputDecoration(
             labelText: 'Neuer Name',
-            labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
             focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
             ),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
           ElevatedButton(
             onPressed: () async {
               final newName = controller.text.trim();
@@ -168,15 +166,18 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
                 final dir = File(oldPath).parent.path;
                 final newPath = p.join(dir, newName);
                 await File(oldPath).rename(newPath);
-                setState(() => _docs[index] = newPath);
+                _docs[index] = newPath;
                 await _saveDocs();
                 await _addCalendarEvent();
                 await _maybeUploadToCloud(newPath);
+                setState(() {});
               }
               Navigator.of(context).pop();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
-            child: const Text('Umbenennen', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade400),
+            child:
+            const Text('Umbenennen', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -184,7 +185,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   }
 
   Future<void> _exportAllDocs() async {
-    final destPath = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Zielordner auswählen');
+    final destPath = await FilePicker.platform
+        .getDirectoryPath(dialogTitle: 'Zielordner auswählen');
     if (destPath == null) return;
 
     try {
@@ -192,16 +194,20 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
         final name = p.basename(path);
         await File(path).copy(p.join(destPath, name));
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Alle Dokumente exportiert')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Alle Dokumente exportiert')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Fehler beim Export: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Fehler beim Export: $e')));
     }
   }
 
   void _showImportOptions() {
     showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
@@ -228,19 +234,25 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   Future<void> _openDoc(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsLastOpened, path);
-    setState(() => _lastOpened = path);
+    _lastOpened = path;
     await _addCalendarEvent();
     await OpenFile.open(path);
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.folderName, style: const TextStyle(color: Colors.black)),
+        title:
+        Text(widget.folderName, style: const TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: Colors.black), onPressed: () => Navigator.of(context).pop(), splashRadius: 24),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+          splashRadius: 24,
+        ),
       ),
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16),
@@ -250,7 +262,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
               onPressed: _exportAllDocs,
               icon: const Icon(Icons.folder_zip, size: 20),
               label: const Text('Exportieren'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green.shade600, padding: const EdgeInsets.symmetric(vertical: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade600,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
             ),
           ),
           const SizedBox(width: 16),
@@ -259,7 +274,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
               onPressed: _showImportOptions,
               icon: const Icon(Icons.add, size: 20),
               label: const Text('Hinzufügen'),
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400, padding: const EdgeInsets.symmetric(vertical: 16)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.purple.shade400,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
             ),
           ),
         ]),
@@ -276,18 +294,30 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
             final name = p.basename(path);
             final isLast = path == _lastOpened;
             return ListTile(
-              tileColor: isLast ? Colors.yellow.shade100 : Colors.grey.shade100,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              leading: const Icon(Icons.insert_drive_file, color: Colors.blue),
+              tileColor:
+              isLast ? Colors.yellow.shade100 : Colors.grey.shade100,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              leading:
+              const Icon(Icons.insert_drive_file, color: Colors.blue),
               title: Text(name, style: const TextStyle(color: Colors.black)),
               trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-                IconButton(icon: const Icon(Icons.visibility, color: Colors.purple), onPressed: () => _openDoc(path)),
-                IconButton(icon: const Icon(Icons.download, color: Colors.green), onPressed: () => Share.shareXFiles([XFile(path)])),
-                IconButton(icon: const Icon(Icons.edit, color: Colors.grey), onPressed: () => _renameDoc(index)),
-                IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {
-                  setState(() => _docs.removeAt(index));
-                  _saveDocs();
-                }),
+                IconButton(
+                    icon: const Icon(Icons.visibility, color: Colors.purple),
+                    onPressed: () => _openDoc(path)),
+                IconButton(
+                    icon: const Icon(Icons.download, color: Colors.green),
+                    onPressed: () => Share.shareXFiles([XFile(path)])),
+                IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.grey),
+                    onPressed: () => _renameDoc(index)),
+                IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    onPressed: () {
+                      _docs.removeAt(index);
+                      _saveDocs();
+                      setState(() {});
+                    }),
               ]),
             );
           },
