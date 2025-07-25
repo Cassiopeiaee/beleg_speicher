@@ -1,4 +1,7 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
@@ -19,6 +22,20 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Beleg Speicher',
+      // 1) Delegates, um Datumspicker & Co. zu lokalisieren
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      // 2) Unterstützte Sprachen
+      supportedLocales: const [
+        Locale('de'), // Deutsch
+        Locale('en'), // Englisch (Fallback)
+      ],
+      // 3) Standard-Sprache
+      locale: const Locale('de'),
+
       theme: ThemeData(
         colorScheme: ColorScheme(
           brightness: Brightness.light,
