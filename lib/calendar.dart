@@ -7,7 +7,11 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:beleg_speicher/inside_ordner.dart';
-import 'package:beleg_speicher/ordner_page.dart';
+
+// Notification-Pakete
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -22,8 +26,11 @@ class _CalendarPageState extends State<CalendarPage> {
   static const _prefsFoldersKey  = 'saved_folders';
   static const _prefsGroupsKey   = 'saved_groups';
 
+  final FlutterLocalNotificationsPlugin _notifications =
+  FlutterLocalNotificationsPlugin();
+
   Map<DateTime, List<String>> _uploadEvents = {};
-  Map<DateTime, List<String>> _notes        = {};
+  final Map<DateTime, List<String>> _notes        = {};
   DateTime _focusedDay    = DateTime.now();
   DateTime? _selectedDay;
   bool _localeInitialized = false;
@@ -32,6 +39,7 @@ class _CalendarPageState extends State<CalendarPage> {
   void initState() {
     super.initState();
     _initializeLocaleAndLoad();
+    _initializeNotifications();
   }
 
   Future<void> _initializeLocaleAndLoad() async {
@@ -41,6 +49,21 @@ class _CalendarPageState extends State<CalendarPage> {
     await _loadNotes();
   }
 
+  Future<void> _initializeNotifications() async {
+    tz.initializeTimeZones();
+
+    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const ios     = DarwinInitializationSettings();
+    const linux   = LinuxInitializationSettings(defaultActionName: 'Öffnen');
+    await _notifications.initialize(
+      const InitializationSettings(
+        android: android,
+        iOS: ios,
+        linux: linux,
+      ),
+    );
+  }
+
   Future<void> _loadUploadEvents() async {
     final prefs = await SharedPreferences.getInstance();
     final savedFolders = prefs.getStringList(_prefsFoldersKey) ?? [];
@@ -48,7 +71,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final Map<String, List<String>> groups = {};
     if (groupsRaw != null) {
       (jsonDecode(groupsRaw) as Map<String, dynamic>)
-          .forEach((k,v) => groups[k] = List<String>.from(v));
+          .forEach((k, v) => groups[k] = List<String>.from(v));
     }
     final active = {...savedFolders, for (var g in groups.values) ...g};
 
@@ -71,8 +94,7 @@ class _CalendarPageState extends State<CalendarPage> {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsNotesKey);
     if (raw != null) {
-      final decoded = jsonDecode(raw) as Map<String, dynamic>;
-      decoded.forEach((k, v) {
+      (jsonDecode(raw) as Map<String, dynamic>).forEach((k, v) {
         final d = DateTime.parse(k);
         _notes[DateTime(d.year, d.month, d.day)] =
             (v as List<dynamic>).cast<String>();
@@ -104,11 +126,34 @@ class _CalendarPageState extends State<CalendarPage> {
     });
   }
 
+  Future<void> _scheduleNotification(DateTime date, String body) async {
+    final tzDate = tz.TZDateTime.from(date, tz.local);
+    await _notifications.zonedSchedule(
+      date.hashCode,
+      'Erinnerung',
+      body,
+      tzDate,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'reminder_channel',
+          'Erinnerungen',
+          importance: Importance.max,
+          priority: Priority.high,
+        ),
+        iOS: DarwinNotificationDetails(),
+        linux: LinuxNotificationDetails(),
+      ),
+      // v13.x:
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      matchDateTimeComponents: DateTimeComponents.dateAndTime,
+    );
+  }
+
   Future<void> _showNoteDialog({int? editIndex}) async {
     if (_selectedDay == null) return;
     final key = _selectedDay!;
     final ctrl = TextEditingController(
-        text: editIndex != null ? _notes[key]![editIndex] : ''
+      text: editIndex != null ? _notes[key]![editIndex] : '',
     );
 
     await showDialog<void>(
@@ -117,17 +162,37 @@ class _CalendarPageState extends State<CalendarPage> {
         title: Text(editIndex != null
             ? 'Notiz bearbeiten'
             : 'Notiz für ${DateFormat.yMMMd('de').format(key)}'),
-        content: TextField(
-          controller: ctrl,
-          maxLines: 5,
-          decoration: InputDecoration(
-            hintText: 'Schreibe deine Notiz…',
-            enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            focusedBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.purple)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: ctrl,
+            maxLines: 5,
+            decoration: InputDecoration(
+              hintText: 'Schreibe deine Notiz…',
+              enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.black)),
+              focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.purple)),
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          if (editIndex == null)
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24),
+                ),
+              ),
+              onPressed: () async {
+                final text = ctrl.text.trim();
+                if (text.isNotEmpty) {
+                  await _scheduleNotification(key, text);
+                }
+                Navigator.of(ctx).pop();
+              },
+              child: const Text('Benachrichtigung planen'),
+            ),
+        ]),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -184,7 +249,8 @@ class _CalendarPageState extends State<CalendarPage> {
               title: Text(folderName),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => InsideOrdnerPage(folderName: folderName),
+                  builder: (_) =>
+                      InsideOrdnerPage(folderName: folderName),
                 ),
               ),
             );
@@ -255,23 +321,26 @@ class _CalendarPageState extends State<CalendarPage> {
               padding: const EdgeInsets.all(16.0),
               child: TableCalendar(
                 firstDay: DateTime(2000),
-                lastDay: DateTime(2100),
+                lastDay:  DateTime(2100),
                 focusedDay: _focusedDay,
                 selectedDayPredicate: (d) =>
                 _selectedDay != null && isSameDay(_selectedDay, d),
                 onDaySelected: _onDaySelected,
                 eventLoader: _getUploadsForDay,
                 calendarBuilders: CalendarBuilders(
-                  defaultBuilder: (ctx, day, focusedDay) {
+                  defaultBuilder: (ctx, day, _) {
                     final key = DateTime(day.year, day.month, day.day);
                     if (_hasNoteForDay(day)) {
                       return Container(
                         decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.yellow.shade300),
+                          shape: BoxShape.circle,
+                          color: Colors.yellow.shade300,
+                        ),
                         alignment: Alignment.center,
-                        child: Text('${day.day}',
-                            style: const TextStyle(color: Colors.black)),
+                        child: Text(
+                          '${day.day}',
+                          style: const TextStyle(color: Colors.black),
+                        ),
                       );
                     }
                     return null;
@@ -284,7 +353,9 @@ class _CalendarPageState extends State<CalendarPage> {
                           width: 6,
                           height: 6,
                           decoration: const BoxDecoration(
-                              color: Colors.pink, shape: BoxShape.circle),
+                            color: Colors.pink,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       );
                     }
@@ -292,30 +363,30 @@ class _CalendarPageState extends State<CalendarPage> {
                   },
                 ),
                 calendarStyle: const CalendarStyle(
-                  todayDecoration: BoxDecoration(
-                      color: Colors.purple, shape: BoxShape.circle),
-                  selectedDecoration: BoxDecoration(
-                      color: Colors.deepPurple, shape: BoxShape.circle),
+                  todayDecoration:    BoxDecoration(color: Colors.purple, shape: BoxShape.circle),
+                  selectedDecoration: BoxDecoration(color: Colors.deepPurple, shape: BoxShape.circle),
                 ),
                 headerStyle: const HeaderStyle(
-                    formatButtonVisible: false, titleCentered: true),
+                  formatButtonVisible: false,
+                  titleCentered:      true,
+                ),
               ),
             ),
 
             // Uploads
             if (_selectedDay != null) _buildUploadList(),
 
-            // Notiz hinzufügen
+            // Button „Notiz hinzufügen“
             if (_selectedDay != null)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                 child: ElevatedButton(
                   onPressed: () => _showNoteDialog(),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.yellow.shade700,
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24))),
+                    backgroundColor: Colors.yellow.shade700,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  ),
                   child: const Text('Notiz hinzufügen'),
                 ),
               ),

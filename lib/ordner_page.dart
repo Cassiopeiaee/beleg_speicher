@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:beleg_speicher/LandingPage.dart';
 import 'package:beleg_speicher/inside_ordner.dart';
 
 class OrdnerPage extends StatefulWidget {
@@ -295,11 +294,11 @@ class _OrdnerPageState extends State<OrdnerPage> {
                 setState(() {
                   if (isRename) {
                     if (_folders.contains(original)) {
-                      final i = _folders.indexOf(original!);
+                      final i = _folders.indexOf(original);
                       _folders[i] = newName;
                     } else {
                       for (var list in _groups.values) {
-                        final idx = list.indexOf(original!);
+                        final idx = list.indexOf(original);
                         if (idx != -1) list[idx] = newName;
                       }
                     }

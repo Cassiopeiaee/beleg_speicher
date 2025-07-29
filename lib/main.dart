@@ -47,8 +47,6 @@ class MyApp extends StatelessWidget {
           onSurface: Colors.black,
           error: Colors.red,
           onError: Colors.white,
-          background: Colors.white,
-          onBackground: Colors.black,
         ),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.purple.shade400,

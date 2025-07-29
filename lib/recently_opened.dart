@@ -5,7 +5,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:intl/intl.dart';
 import 'package:open_file/open_file.dart';
 import 'inside_ordner.dart';
 
@@ -84,7 +83,7 @@ class RecentlyOpenedPage extends StatelessWidget {
                         ));
                       },
                     );
-                  }).toList(),
+                  }),
                   const Divider(thickness: 2, color: Colors.purple),
                 ],
               );
