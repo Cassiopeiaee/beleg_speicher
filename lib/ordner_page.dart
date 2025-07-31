@@ -1,10 +1,14 @@
+// lib/ordner_page.dart
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:beleg_speicher/inside_ordner.dart';
+
+import 'cloud_sync_manager.dart';
+import 'inside_ordner.dart';
 
 class OrdnerPage extends StatefulWidget {
-  const OrdnerPage({super.key});
+  const OrdnerPage({Key? key}) : super(key: key);
 
   @override
   State<OrdnerPage> createState() => _OrdnerPageState();
@@ -14,16 +18,45 @@ class _OrdnerPageState extends State<OrdnerPage> {
   static const _prefsFoldersKey = 'saved_folders';
   static const _prefsGroupsKey = 'saved_groups';
 
+  bool _cloudEnabled = false;
   List<String> _folders = [];
   Map<String, List<String>> _groups = {};
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _initialize();
   }
 
-  Future<void> _loadData() async {
+  Future<void> _initialize() async {
+    // 1) Prüfen, ob Cloud-Sync aktiviert ist
+    _cloudEnabled = await CloudSyncManager.isSyncEnabledLocal();
+
+    // 2) Lokale Ordner/Gruppen laden
+    await _loadLocalData();
+
+    if (_cloudEnabled) {
+      // 3a) Alle Ordner aus Firebase Storage holen
+      final cloudFolders = await CloudSyncManager.listCloudFolders();
+
+      // 3b) Union von lokal + Cloud
+      final merged = Set<String>.from(_folders)..addAll(cloudFolders);
+      _folders = merged.toList();
+
+      // 3c) in SharedPreferences sichern
+      await _saveAll();
+
+      // 3d) alle Dokumente aus allen Cloud-Ordnern herunterladen
+      await CloudSyncManager.downloadCloudToLocal();
+
+      // 3e) lokal neu laden (prefs könnten um neue docs_ Keys erweitert sein)
+      await _loadLocalData();
+    }
+
+    setState(() {});
+  }
+
+  Future<void> _loadLocalData() async {
     final prefs = await SharedPreferences.getInstance();
     final savedFolders = prefs.getStringList(_prefsFoldersKey);
     if (savedFolders != null && savedFolders.isNotEmpty) {
@@ -36,7 +69,6 @@ class _OrdnerPageState extends State<OrdnerPage> {
       final decoded = jsonDecode(groupsJson) as Map<String, dynamic>;
       _groups = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
     }
-    setState(() {});
   }
 
   Future<void> _saveAll() async {
@@ -184,8 +216,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
   void _showAddOptions() {
     showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape:
+      const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
@@ -227,19 +259,14 @@ class _OrdnerPageState extends State<OrdnerPage> {
           decoration: InputDecoration(
             labelText: 'Gruppen-Name',
             labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            focusedBorder: UnderlineInputBorder(
-                borderSide:
-                BorderSide(color: Colors.purple.shade400, width: 2)),
+            border: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
+            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
+            focusedBorder:
+            UnderlineInputBorder(borderSide: BorderSide(color: Colors.purple.shade400, width: 2)),
           ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Abbrechen')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
           ElevatedButton(
             onPressed: () {
               final name = controller.text.trim();
@@ -249,10 +276,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
               }
               Navigator.of(context).pop();
             },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple.shade400),
-            child:
-            const Text('Erstellen', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
+            child: const Text('Erstellen', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -265,8 +290,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title:
-        Text(isRename ? 'Ordner umbenennen' : 'Ordner erstellen'),
+        title: Text(isRename ? 'Ordner umbenennen' : 'Ordner erstellen'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -274,19 +298,14 @@ class _OrdnerPageState extends State<OrdnerPage> {
           decoration: InputDecoration(
             labelText: 'Name',
             labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            focusedBorder: UnderlineInputBorder(
-                borderSide:
-                BorderSide(color: Colors.purple.shade400, width: 2)),
+            border: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
+            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
+            focusedBorder:
+            UnderlineInputBorder(borderSide: BorderSide(color: Colors.purple.shade400, width: 2)),
           ),
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Abbrechen')),
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
           ElevatedButton(
             onPressed: () {
               final newName = controller.text.trim();
@@ -294,11 +313,11 @@ class _OrdnerPageState extends State<OrdnerPage> {
                 setState(() {
                   if (isRename) {
                     if (_folders.contains(original)) {
-                      final i = _folders.indexOf(original);
+                      final i = _folders.indexOf(original!);
                       _folders[i] = newName;
                     } else {
                       for (var list in _groups.values) {
-                        final idx = list.indexOf(original);
+                        final idx = list.indexOf(original!);
                         if (idx != -1) list[idx] = newName;
                       }
                     }
@@ -310,8 +329,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
               }
               Navigator.of(context).pop();
             },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple.shade400),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
             child: Text(isRename ? 'Umbenennen' : 'Bestätigen',
                 style: const TextStyle(color: Colors.white)),
           ),
@@ -323,8 +341,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
   void _showAssignGroup(String folderName) {
     showModalBottomSheet<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape:
+      const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var groupName in _groups.keys)
@@ -380,23 +398,10 @@ class _FolderTile extends StatelessWidget {
               ),
             ),
             if (onRemoveFromGroup != null)
-              IconButton(
-                icon: const Icon(Icons.remove_circle, color: Colors.red),
-                onPressed: onRemoveFromGroup,
-              ),
-            IconButton(
-              icon: const Icon(Icons.group, color: Colors.purple),
-              onPressed: onGroup,
-            ),
-            IconButton(
-              icon: const Icon(Icons.edit, color: Colors.grey),
-              onPressed: onRename,
-              splashRadius: 24,
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.black54),
-              onPressed: onDelete,
-            ),
+              IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: onRemoveFromGroup),
+            IconButton(icon: const Icon(Icons.group, color: Colors.purple), onPressed: onGroup),
+            IconButton(icon: const Icon(Icons.edit, color: Colors.grey), onPressed: onRename, splashRadius: 24),
+            IconButton(icon: const Icon(Icons.delete, color: Colors.black54), onPressed: onDelete),
           ],
         ),
       ),

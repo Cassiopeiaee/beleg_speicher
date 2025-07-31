@@ -13,14 +13,14 @@ import 'package:share_plus/share_plus.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
-// Firebase:
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InsideOrdnerPage extends StatefulWidget {
   final String folderName;
-  const InsideOrdnerPage({super.key, required this.folderName});
+  const InsideOrdnerPage({Key? key, required this.folderName})
+      : super(key: key);
 
   @override
   State<InsideOrdnerPage> createState() => _InsideOrdnerPageState();
@@ -30,7 +30,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   static const _prefsDocsPrefix = 'docs_';
   static const _prefsEventsKey = 'calendar_events';
   static const _prefsLastOpened = 'last_opened_doc';
-  static const _prefsCloudKey = 'cloud_sync_enabled';
+  // hier muss der Key mit CloudSyncManager übereinstimmen:
+  static const _prefsCloudKey = 'cloudSyncEnabled';
 
   List<String> _docs = [];
   String? _lastOpened;
@@ -112,7 +113,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
 
   Future<void> _importImage() async {
     final picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? image =
+    await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       _docs.insert(0, image.path);
       await _saveDocs();
@@ -123,7 +125,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   }
 
   Future<void> _importFile() async {
-    final typeGroup = XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
+    final typeGroup =
+    XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
     final file = await openFile(acceptedTypeGroups: [typeGroup]);
     if (file != null) {
       _docs.insert(0, file.path);
@@ -149,7 +152,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
           decoration: InputDecoration(
             labelText: 'Neuer Name',
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Colors.purple.shade400, width: 2),
+              borderSide:
+              BorderSide(color: Colors.purple.shade400, width: 2),
             ),
           ),
         ),
@@ -175,8 +179,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.purple.shade400),
-            child:
-            const Text('Umbenennen', style: TextStyle(color: Colors.white)),
+            child: const Text('Umbenennen',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -196,8 +200,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Alle Dokumente exportiert')));
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Fehler beim Export: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fehler beim Export: $e')));
     }
   }
 
@@ -205,7 +209,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius:
+        BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -243,8 +248,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-        Text(widget.folderName, style: const TextStyle(color: Colors.black)),
+        title: Text(widget.folderName,
+            style: const TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -287,31 +292,40 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
             : ListView.separated(
           padding: const EdgeInsets.all(16),
           itemCount: _docs.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
+          separatorBuilder: (_, __) =>
+          const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final path = _docs[index];
             final name = p.basename(path);
             final isLast = path == _lastOpened;
             return ListTile(
-              tileColor:
-              isLast ? Colors.yellow.shade100 : Colors.grey.shade100,
+              tileColor: isLast
+                  ? Colors.yellow.shade100
+                  : Colors.grey.shade100,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12)),
-              leading:
-              const Icon(Icons.insert_drive_file, color: Colors.blue),
-              title: Text(name, style: const TextStyle(color: Colors.black)),
-              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+              leading: const Icon(Icons.insert_drive_file,
+                  color: Colors.blue),
+              title: Text(name,
+                  style: const TextStyle(color: Colors.black)),
+              trailing: Row(
+                  mainAxisSize: MainAxisSize.min, children: [
                 IconButton(
-                    icon: const Icon(Icons.visibility, color: Colors.purple),
+                    icon: const Icon(Icons.visibility,
+                        color: Colors.purple),
                     onPressed: () => _openDoc(path)),
                 IconButton(
-                    icon: const Icon(Icons.download, color: Colors.green),
-                    onPressed: () => Share.shareXFiles([XFile(path)])),
+                    icon: const Icon(Icons.download,
+                        color: Colors.green),
+                    onPressed: () =>
+                        Share.shareXFiles([XFile(path)])),
                 IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.grey),
+                    icon: const Icon(Icons.edit,
+                        color: Colors.grey),
                     onPressed: () => _renameDoc(index)),
                 IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
+                    icon: const Icon(Icons.delete,
+                        color: Colors.red),
                     onPressed: () {
                       _docs.removeAt(index);
                       _saveDocs();

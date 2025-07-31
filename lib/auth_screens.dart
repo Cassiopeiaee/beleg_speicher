@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:beleg_speicher/home_page.dart';
 import 'package:beleg_speicher/reset_password.dart';  // hier liegt ResetPasswordPage
 import 'auth_helpers.dart';
+import 'cloud_sync_manager.dart';
 
 /// Gemeinsame Input-Dekoration für alle Textfelder
 InputDecoration _buildInputDecoration(String label) {
@@ -54,6 +55,7 @@ class LoginPage extends StatefulWidget {
   @override
   State<LoginPage> createState() => _LoginPageState();
 }
+
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   String _email = '', _password = '';
@@ -78,28 +80,115 @@ class _LoginPageState extends State<LoginPage> {
       final cred = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: _email, password: _password);
 
-      // Firestore-Profil prüfen/erstellen
       await _ensureUserDoc(cred.user!, 'password');
+
+      // Sync-Flag und Daten
+      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
+      if (syncEnabled) {
+        await CloudSyncManager.downloadCloudToLocal();
+      }
 
       _navigateToHome(cred.user!);
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Login fehlgeschlagen: ${e.message}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Login fehlgeschlagen: ${e.message}')),
+      );
     }
   }
 
   Future<void> _googleLogin() async {
     try {
-      final cred = await AuthHelpers.signInWithGoogle();
+      // Versuche Google-SignIn direkt
+      final cred = await AuthHelpers.signInWithGoogle()
+      as UserCredential; // erwartet UserCredential mit google-credential
+      final user = cred.user!;
+      await _ensureUserDoc(user, 'google');
 
-      // Firestore-Profil prüfen/erstellen
-      await _ensureUserDoc(cred.user!, 'google');
+      // Sync-Flag und Daten
+      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
+      if (syncEnabled) {
+        await CloudSyncManager.downloadCloudToLocal();
+      }
 
-      _navigateToHome(cred.user!);
+      _navigateToHome(user);
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Google Sign-In fehlgeschlagen: ${e.message}')));
+      if (e.code == 'account-exists-with-different-credential') {
+        // Der Nutzer hat bereits ein E-Mail/PW-Konto unter dieser E-Mail
+        final email = e.email!;
+        final pendingCred = e.credential!; // Google-Credential
+        // Passwort mit Dialog abfragen
+        final password = await _askForPassword(email);
+        if (password == null) {
+          // Abgebrochen
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Verknüpfung abgebrochen')),
+          );
+          return;
+        }
+        try {
+          // E-Mail/PW einloggen
+          final userCred = await FirebaseAuth.instance
+              .signInWithEmailAndPassword(email: email, password: password);
+          final user = userCred.user!;
+          // Mit Google-Credential verknüpfen
+          await user.linkWithCredential(pendingCred);
+          await _ensureUserDoc(user, 'google');
+
+          final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
+          if (syncEnabled) {
+            await CloudSyncManager.downloadCloudToLocal();
+          }
+
+          _navigateToHome(user);
+        } on FirebaseAuthException catch (e2) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Verknüpfung fehlgeschlagen: ${e2.message}')),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google Sign-In fehlgeschlagen: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fehler: $e')),
+      );
     }
+  }
+
+  /// Zeigt einen Dialog, um das Passwort abzufragen
+  Future<String?> _askForPassword(String email) {
+    final _pwController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Passwort benötigt'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Für $email existiert bereits ein Konto.\n'
+                'Bitte Passwort eingeben, um die Konten zu verknüpfen.'),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _pwController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Passwort'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Abbrechen'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(_pwController.text),
+            child: const Text('Verknüpfen'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _navigateToHome(User user) {
@@ -115,7 +204,8 @@ class _LoginPageState extends State<LoginPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Anmelden', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white, elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: Transform.scale(
             scale: 1.3,
@@ -125,7 +215,7 @@ class _LoginPageState extends State<LoginPage> {
           splashRadius: 24,
         ),
       ),
-      body: SingleChildScrollView(          // <-- verhindert Overflow
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
@@ -161,7 +251,8 @@ class _LoginPageState extends State<LoginPage> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Einloggen', style: TextStyle(color: Colors.white)),
+                    child:
+                    const Text('Einloggen', style: TextStyle(color: Colors.white)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -205,6 +296,7 @@ class RegisterPage extends StatefulWidget {
   @override
   State<RegisterPage> createState() => _RegisterPageState();
 }
+
 class _RegisterPageState extends State<RegisterPage> {
   final _formKey = GlobalKey<FormState>();
   String _email = '', _password = '';
@@ -224,6 +316,7 @@ class _RegisterPageState extends State<RegisterPage> {
       });
     });
   }
+
   @override
   void dispose() {
     _passwordController.dispose();
@@ -231,7 +324,6 @@ class _RegisterPageState extends State<RegisterPage> {
     super.dispose();
   }
 
-  /// derselbe Helper wie in LoginPage
   Future<void> _ensureUserDoc(User user, String provider) async {
     final doc = FirebaseFirestore.instance.collection('users').doc(user.uid);
     final snap = await doc.get();
@@ -250,11 +342,13 @@ class _RegisterPageState extends State<RegisterPage> {
     try {
       final cred = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: _email, password: _password);
-
-      // Firestore-Profil anlegen
       await _ensureUserDoc(cred.user!, 'password');
 
-      // direkt weiterleiten
+      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
+      if (syncEnabled) {
+        await CloudSyncManager.downloadCloudToLocal();
+      }
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => HomePage(firstName: _email, lastName: '')),
       );
@@ -267,11 +361,18 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _googleRegister() async {
     try {
-      final cred = await AuthHelpers.signInWithGoogle();
-      await _ensureUserDoc(cred.user!, 'google');
+      final cred = await AuthHelpers.signInWithGoogle() as UserCredential;
+      final user = cred.user!;
+      await _ensureUserDoc(user, 'google');
+
+      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
+      if (syncEnabled) {
+        await CloudSyncManager.downloadCloudToLocal();
+      }
+
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) =>
-            HomePage(firstName: cred.user!.email ?? '', lastName: '')),
+        MaterialPageRoute(
+            builder: (_) => HomePage(firstName: user.email ?? '', lastName: '')),
       );
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -287,7 +388,8 @@ class _RegisterPageState extends State<RegisterPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Registrieren', style: TextStyle(color: Colors.black)),
-        backgroundColor: Colors.white, elevation: 0,
+        backgroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: Transform.scale(
             scale: 1.3,
@@ -297,7 +399,7 @@ class _RegisterPageState extends State<RegisterPage> {
           splashRadius: 24,
         ),
       ),
-      body: SingleChildScrollView(  // <-- verhindert Overflow
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
@@ -325,13 +427,17 @@ class _RegisterPageState extends State<RegisterPage> {
                   const SizedBox(height: 8),
                   Row(children: [
                     Text('• ', style: TextStyle(color: _bulletColor(_isLengthValid))),
-                    Expanded(child: Text('Mindestlänge 8 Zeichen',
-                        style: TextStyle(color: _bulletColor(_isLengthValid)))),
+                    Expanded(
+                      child: Text('Mindestlänge 8 Zeichen',
+                          style: TextStyle(color: _bulletColor(_isLengthValid))),
+                    ),
                   ]),
                   Row(children: [
                     Text('• ', style: TextStyle(color: _bulletColor(_hasNumber))),
-                    Expanded(child: Text('Mindestens 1 Zahl',
-                        style: TextStyle(color: _bulletColor(_hasNumber)))),
+                    Expanded(
+                      child: Text('Mindestens 1 Zahl',
+                          style: TextStyle(color: _bulletColor(_hasNumber))),
+                    ),
                   ]),
                 ],
                 const SizedBox(height: 32),
@@ -345,7 +451,8 @@ class _RegisterPageState extends State<RegisterPage> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
+                    child:
+                    const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ]),

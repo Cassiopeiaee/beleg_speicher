@@ -1,22 +1,17 @@
 // lib/home_page.dart
 
 import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
 
-// Firebase:
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'cloud_sync_manager.dart';
+import 'ordner_page.dart';
+import 'calendar.dart';
+import 'year_beleg.dart';
+import 'LandingPage.dart';
 
-import 'package:beleg_speicher/LandingPage.dart';
-import 'package:beleg_speicher/ordner_page.dart';
-import 'package:beleg_speicher/calendar.dart';
-import 'package:beleg_speicher/year_beleg.dart';
-
-const _prefsCloudKey = 'cloud_sync_enabled';
 const _earliestYear = 2021;
 
 class HomePage extends StatefulWidget {
@@ -36,6 +31,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   bool _cloudEnabled = false;
   late final List<int> _years;
+  OverlayEntry? _uploadOverlay;
 
   @override
   void initState() {
@@ -43,73 +39,72 @@ class _HomePageState extends State<HomePage> {
     _years = [
       for (int y = DateTime.now().year; y >= _earliestYear; y--) y,
     ];
-    _loadCloudFlag();
+    _initializeSync();
   }
 
-  Future<void> _loadCloudFlag() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _cloudEnabled = prefs.getBool(_prefsCloudKey) ?? false;
-    });
+  Future<void> _initializeSync() async {
+    // Remote-Flag aus Firestore holen
+    final enabled = await CloudSyncManager.fetchRemoteSyncFlag();
+    setState(() => _cloudEnabled = enabled);
+
+    if (enabled) {
+      // Daten vom Cloud-Backup lokal herunterladen
+      await CloudSyncManager.downloadCloudToLocal();
+    }
   }
 
-  Future<void> _enableCloudSync() async {
-    final prefs = await SharedPreferences.getInstance();
+  Future<void> _toggleCloudSync() async {
     if (_cloudEnabled) {
+      // Deaktivieren: Remote-Flag ausschalten
+      await CloudSyncManager.setRemoteSyncFlag(false);
+      setState(() => _cloudEnabled = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cloud-Sync ist bereits aktiviert')),
+        const SnackBar(content: Text('Cloud-Sync deaktiviert')),
       );
-      return;
+    } else {
+      // Aktivieren: erst lokal hochladen
+      await CloudSyncManager.uploadLocalToCloud();
+      // Pop-up anzeigen, wenn Upload abgeschlossen ist
+      _showUploadNotification();
+
+      // Remote-Flag setzen
+      await CloudSyncManager.setRemoteSyncFlag(true);
+      setState(() => _cloudEnabled = true);
+
+      // Anschließend alle Cloud-Dateien herunterladen
+      await CloudSyncManager.downloadCloudToLocal();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cloud-Sync aktiviert und synchronisiert')),
+      );
     }
+  }
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final uid = user.uid;
-
-    final storage = FirebaseStorage.instance;
-    final filesCol = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('files');
-
-    // Alle lokal gespeicherten Dokumente in die Cloud laden
-    for (final key in prefs.getKeys()) {
-      if (!key.startsWith('docs_')) continue;
-      final folderName = key.substring('docs_'.length);
-      final paths = prefs.getStringList(key) ?? [];
-      for (final path in paths) {
-        final file = File(path);
-        if (!await file.exists()) continue;
-        final fileName = path.split(Platform.pathSeparator).last;
-        final ref = storage.ref('backups/$uid/$folderName/$fileName');
-        try {
-          await ref.putFile(file);
-          await filesCol.add({
-            'folder': folderName,
-            'fileName': fileName,
-            'uploadedAt': FieldValue.serverTimestamp(),
-            'storagePath': ref.fullPath,
-          });
-        } catch (e) {
-          debugPrint('Upload $path fehlgeschlagen: $e');
-        }
-      }
-    }
-
-    await prefs.setBool(_prefsCloudKey, true);
-    setState(() => _cloudEnabled = true);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Cloud-Sync aktiviert und alle Dateien gesichert')),
+  void _showUploadNotification() {
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
+    _uploadOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top,
+        left: 0,
+        right: 0,
+        child: _UploadNotification(
+          onDismissed: () {
+            _uploadOverlay?.remove();
+            _uploadOverlay = null;
+          },
+        ),
+      ),
     );
+    overlay.insert(_uploadOverlay!);
   }
 
   Future<void> _openLastOpened() async {
     final prefs = await SharedPreferences.getInstance();
     final path = prefs.getString('last_opened_doc');
     if (path != null && await File(path).exists()) {
-      final fileName = path.split(Platform.pathSeparator).last;
+      final name = path.split(Platform.pathSeparator).last;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Öffne zuletzt geöffneten Beleg: $fileName')),
+        SnackBar(content: Text('Öffne zuletzt geöffneten Beleg: $name')),
       );
       await OpenFile.open(path);
     } else {
@@ -234,7 +229,7 @@ class _HomePageState extends State<HomePage> {
               subtitle: _cloudEnabled
                   ? 'Alle Dateien in der Cloud gesichert'
                   : 'Erstmalige Sicherung in die Cloud',
-              onTap: _enableCloudSync,
+              onTap: _toggleCloudSync,
             ),
           ],
         ),
@@ -320,6 +315,73 @@ class _PillButton extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Ein kleines Overlay, das oben ein Popup anzeigt,
+/// mit Text und einer progress-animierten Leiste.
+class _UploadNotification extends StatefulWidget {
+  final VoidCallback onDismissed;
+  const _UploadNotification({required this.onDismissed});
+
+  @override
+  State<_UploadNotification> createState() => _UploadNotificationState();
+}
+
+class _UploadNotificationState extends State<_UploadNotification>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    // Animation von v=1.0 → 0.0 in 3 Sekunden
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+      value: 1.0,
+    )..reverse().whenComplete(() {
+      widget.onDismissed();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: const Text(
+              'Datei wurde erfolgreich hochgeladen',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.black),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              return LinearProgressIndicator(
+                value: _controller.value,
+                backgroundColor: Colors.transparent,
+                valueColor: const AlwaysStoppedAnimation(Colors.green),
+                minHeight: 4,
+              );
+            },
+          ),
+        ],
       ),
     );
   }

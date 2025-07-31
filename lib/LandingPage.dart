@@ -1,3 +1,5 @@
+// lib/LandingPage.dart
+
 import 'package:flutter/material.dart';
 import 'package:beleg_speicher/auth_screens.dart'; // LoginPage & RegisterPage
 
@@ -42,7 +44,6 @@ class LandingPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 48),
-
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -61,9 +62,7 @@ class LandingPage extends StatelessWidget {
                   style: TextStyle(fontSize: 18, color: Colors.white),
                 ),
               ),
-
               const SizedBox(height: 16),
-
               OutlinedButton(
                 onPressed: () {
                   Navigator.of(context).push(
@@ -82,9 +81,7 @@ class LandingPage extends StatelessWidget {
                   style: TextStyle(fontSize: 18, color: Colors.purple.shade400),
                 ),
               ),
-
               const SizedBox(height: 24),
-
               TextButton(
                 onPressed: () {
                   // TODO: AGB & Datenschutz

@@ -6,7 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:open_file/open_file.dart';
-import 'inside_ordner.dart';
+import 'package:beleg_speicher/inside_ordner.dart';
 
 class RecentlyOpenedPage extends StatelessWidget {
   const RecentlyOpenedPage({super.key});

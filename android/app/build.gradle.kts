@@ -2,8 +2,6 @@
 
 plugins {
     id("com.android.application")
-    // Falls dein Projekt mit dem neuen Kotlin-DSL eingerichtet ist, sonst:
-    // id("kotlin-android")
     id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")       // für google-services.json
     id("dev.flutter.flutter-gradle-plugin")    // Flutter-Plugin zuletzt
@@ -21,12 +19,15 @@ android {
         versionName = flutter.versionName
     }
 
+    // Java 8-Desugaring aktivieren
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+        isCoreLibraryDesugaringEnabled = true
     }
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        // jvmTarget sollte ebenfalls 1.8 sein
+        jvmTarget = "1.8"
     }
 
     buildTypes {
@@ -37,16 +38,20 @@ android {
 }
 
 dependencies {
+    // Desugaring-Bibliothek für Java 8-APIs (auf Version 2.1.4 erhöht)
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
     // Firebase BoM: sorgt dafür, dass alle Firebase-Bibliotheken kompatible Versionen verwenden
     implementation(platform("com.google.firebase:firebase-bom:32.3.0"))
 
     // Firebase Cloud Storage (Kotlin-Extensions)
     implementation("com.google.firebase:firebase-storage-ktx")
 
-    // Hier deine weiteren Abhängigkeiten aus dem ursprünglichen Projekt:
-    // z.B. implementation("androidx.core:core-ktx:1.9.0")
-    //      implementation("com.google.firebase:firebase-auth-ktx")
-    //      usw.
+    // Beispiel weiterer Abhängigkeiten aus deinem Projekt:
+    implementation("androidx.core:core-ktx:1.9.0")
+    implementation("com.google.firebase:firebase-auth-ktx")
+    implementation("com.google.android.material:material:1.8.0")
+    // … restliche deps
 }
 
 flutter {

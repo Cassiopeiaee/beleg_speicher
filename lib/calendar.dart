@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:beleg_speicher/inside_ordner.dart';
+import 'inside_ordner.dart';
 
 // Notification-Pakete
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
