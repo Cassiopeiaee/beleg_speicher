@@ -3,9 +3,11 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-import 'cloud_sync_manager.dart';
 import 'inside_ordner.dart';
+import 'cloud_sync_manager.dart';
 
 class OrdnerPage extends StatefulWidget {
   const OrdnerPage({Key? key}) : super(key: key);
@@ -18,56 +20,56 @@ class _OrdnerPageState extends State<OrdnerPage> {
   static const _prefsFoldersKey = 'saved_folders';
   static const _prefsGroupsKey = 'saved_groups';
 
-  bool _cloudEnabled = false;
+  bool _isLoading = false;
   List<String> _folders = [];
   Map<String, List<String>> _groups = {};
 
   @override
   void initState() {
     super.initState();
-    _initialize();
+    _loadData();
   }
 
-  Future<void> _initialize() async {
-    // 1) Prüfen, ob Cloud-Sync aktiviert ist
-    _cloudEnabled = await CloudSyncManager.isSyncEnabledLocal();
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedFolders = prefs.getStringList(_prefsFoldersKey);
+      if (savedFolders != null && savedFolders.isNotEmpty) {
+        _folders = List.from(savedFolders);
+      } else {
+        _folders = ['2025', '2024'];
+      }
+      final groupsJson = prefs.getString(_prefsGroupsKey);
+      if (groupsJson != null) {
+        final decoded = jsonDecode(groupsJson) as Map<String, dynamic>;
+        _groups = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+      }
 
-    // 2) Lokale Ordner/Gruppen laden
-    await _loadLocalData();
-
-    if (_cloudEnabled) {
-      // 3a) Alle Ordner aus Firebase Storage holen
-      final cloudFolders = await CloudSyncManager.listCloudFolders();
-
-      // 3b) Union von lokal + Cloud
-      final merged = Set<String>.from(_folders)..addAll(cloudFolders);
-      _folders = merged.toList();
-
-      // 3c) in SharedPreferences sichern
-      await _saveAll();
-
-      // 3d) alle Dokumente aus allen Cloud-Ordnern herunterladen
-      await CloudSyncManager.downloadCloudToLocal();
-
-      // 3e) lokal neu laden (prefs könnten um neue docs_ Keys erweitert sein)
-      await _loadLocalData();
-    }
-
-    setState(() {});
-  }
-
-  Future<void> _loadLocalData() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedFolders = prefs.getStringList(_prefsFoldersKey);
-    if (savedFolders != null && savedFolders.isNotEmpty) {
-      _folders = List.from(savedFolders);
-    } else {
-      _folders = ['2025', '2024'];
-    }
-    final groupsJson = prefs.getString(_prefsGroupsKey);
-    if (groupsJson != null) {
-      final decoded = jsonDecode(groupsJson) as Map<String, dynamic>;
-      _groups = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+      // Wenn Cloud-Sync aktiviert, lade Ordner + Gruppen aus Firestore
+      if (await CloudSyncManager.isSyncEnabledLocal()) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          final doc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          if (doc.exists) {
+            final data = doc.data()!;
+            if (data['folders'] is List) {
+              _folders = List<String>.from(data['folders']);
+            }
+            if (data['groups'] is Map) {
+              final gm = Map<String, dynamic>.from(data['groups']);
+              _groups = gm.map(
+                    (k, v) => MapEntry(k, List<String>.from(v as List)),
+              );
+            }
+          }
+        }
+      }
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -75,6 +77,20 @@ class _OrdnerPageState extends State<OrdnerPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_prefsFoldersKey, _folders);
     await prefs.setString(_prefsGroupsKey, jsonEncode(_groups));
+
+    // Bei aktiviertem Cloud-Sync auch in Firestore speichern
+    if (await CloudSyncManager.isSyncEnabledLocal()) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
+          'folders': _folders,
+          'groups': _groups,
+        }, SetOptions(merge: true));
+      }
+    }
   }
 
   @override
@@ -96,119 +112,133 @@ class _OrdnerPageState extends State<OrdnerPage> {
         icon: const Icon(Icons.add, color: Colors.white),
         label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              // Suchfeld
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade200,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: const TextField(
-                  decoration: InputDecoration(
-                    icon: Icon(Icons.search, color: Colors.purple),
-                    hintText: 'Suche Ordner',
-                    hintStyle: TextStyle(color: Colors.black87),
-                    border: InputBorder.none,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  // Suchfeld
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: const TextField(
+                      decoration: InputDecoration(
+                        icon: Icon(Icons.search, color: Colors.purple),
+                        hintText: 'Suche Ordner',
+                        hintStyle: TextStyle(color: Colors.black87),
+                        border: InputBorder.none,
+                      ),
+                      style: TextStyle(color: Colors.black),
+                    ),
                   ),
-                  style: TextStyle(color: Colors.black),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Gruppen + ungruppierte Ordner
-              Expanded(
-                child: ListView(
-                  children: [
-                    // Gruppen
-                    for (var entry in _groups.entries)
-                      ExpansionTile(
-                        title: Text(
-                          entry.key,
-                          style: const TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        iconColor: Colors.black,
-                        collapsedIconColor: Colors.black,
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete, color: Colors.red),
-                          onPressed: () {
-                            setState(() => _groups.remove(entry.key));
-                            _saveAll();
-                          },
-                        ),
-                        children: [
-                          for (var name in entry.value)
-                            GestureDetector(
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      InsideOrdnerPage(folderName: name),
-                                ),
-                              ),
-                              child: _FolderTile(
-                                name: name,
-                                onRename: () =>
-                                    _showFolderDialog(original: name),
-                                onGroup: null,
-                                onRemoveFromGroup: () {
-                                  setState(() {
-                                    entry.value.remove(name);
-                                    _folders.add(name);
-                                  });
-                                  _saveAll();
-                                },
-                                onDelete: () {
-                                  setState(() => entry.value.remove(name));
-                                  _saveAll();
-                                },
-                              ),
+                  const SizedBox(height: 16),
+                  // Gruppen + ungruppierte Ordner
+                  Expanded(
+                    child: ListView(
+                      children: [
+                        // Gruppen
+                        for (var entry in _groups.entries)
+                          ExpansionTile(
+                            title: Text(
+                              entry.key,
+                              style: const TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold),
                             ),
-                        ],
-                      ),
-
-                    // Ungruppierte
-                    if (_folders.isNotEmpty) ...[
-                      const Divider(thickness: 2, color: Colors.purple),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8.0),
-                        child: Text(
-                          'Nicht zugeordnet',
-                          style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                    // Ungruppierte Ordner
-                    for (var name in _folders)
-                      GestureDetector(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                InsideOrdnerPage(folderName: name),
+                            iconColor: Colors.black,
+                            collapsedIconColor: Colors.black,
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () {
+                                setState(() => _groups.remove(entry.key));
+                                _saveAll();
+                              },
+                            ),
+                            children: [
+                              for (var name in entry.value)
+                                GestureDetector(
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                        builder: (_) => InsideOrdnerPage(
+                                            folderName: name)),
+                                  ),
+                                  child: _FolderTile(
+                                    name: name,
+                                    onRename: () =>
+                                        _showFolderDialog(original: name),
+                                    onGroup: null,
+                                    onRemoveFromGroup: () {
+                                      setState(() {
+                                        entry.value.remove(name);
+                                        _folders.add(name);
+                                      });
+                                      _saveAll();
+                                    },
+                                    onDelete: () {
+                                      setState(
+                                              () => entry.value.remove(name));
+                                      _saveAll();
+                                    },
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                        child: _FolderTile(
-                          name: name,
-                          onRename: () =>
-                              _showFolderDialog(original: name),
-                          onGroup: () => _showAssignGroup(name),
-                          onRemoveFromGroup: null,
-                          onDelete: () {
-                            setState(() => _folders.remove(name));
-                            _saveAll();
-                          },
-                        ),
-                      ),
-                  ],
+
+                        // Ungruppierte
+                        if (_folders.isNotEmpty) ...[
+                          const Divider(thickness: 2, color: Colors.purple),
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: Text(
+                              'Nicht zugeordnet',
+                              style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                        // Ungruppierte Ordner
+                        for (var name in _folders)
+                          GestureDetector(
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      InsideOrdnerPage(folderName: name)),
+                            ),
+                            child: _FolderTile(
+                              name: name,
+                              onRename: () =>
+                                  _showFolderDialog(original: name),
+                              onGroup: () => _showAssignGroup(name),
+                              onRemoveFromGroup: null,
+                              onDelete: () {
+                                setState(() => _folders.remove(name));
+                                _saveAll();
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Lade-Overlay
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black38,
+                child: const Center(
+                  child: CircularProgressIndicator(),
                 ),
               ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -216,8 +246,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
   void _showAddOptions() {
     showModalBottomSheet<void>(
       context: context,
-      shape:
-      const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           ListTile(
@@ -235,11 +265,6 @@ class _OrdnerPageState extends State<OrdnerPage> {
               Navigator.of(context).pop();
               _showFolderDialog();
             },
-          ),
-          ListTile(
-            leading: const Icon(Icons.file_upload),
-            title: const Text('Ordner importieren'),
-            onTap: () => Navigator.of(context).pop(),
           ),
         ]),
       ),
@@ -259,14 +284,19 @@ class _OrdnerPageState extends State<OrdnerPage> {
           decoration: InputDecoration(
             labelText: 'Gruppen-Name',
             labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
-            focusedBorder:
-            UnderlineInputBorder(borderSide: BorderSide(color: Colors.purple.shade400, width: 2)),
+            border: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            focusedBorder: UnderlineInputBorder(
+                borderSide:
+                BorderSide(color: Colors.purple.shade400, width: 2)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Abbrechen')),
           ElevatedButton(
             onPressed: () {
               final name = controller.text.trim();
@@ -276,8 +306,10 @@ class _OrdnerPageState extends State<OrdnerPage> {
               }
               Navigator.of(context).pop();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
-            child: const Text('Erstellen', style: TextStyle(color: Colors.white)),
+            style:
+            ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
+            child: const Text('Erstellen',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -298,14 +330,19 @@ class _OrdnerPageState extends State<OrdnerPage> {
           decoration: InputDecoration(
             labelText: 'Name',
             labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.black)),
-            focusedBorder:
-            UnderlineInputBorder(borderSide: BorderSide(color: Colors.purple.shade400, width: 2)),
+            border: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.black)),
+            focusedBorder: UnderlineInputBorder(
+                borderSide:
+                BorderSide(color: Colors.purple.shade400, width: 2)),
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Abbrechen')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Abbrechen')),
           ElevatedButton(
             onPressed: () {
               final newName = controller.text.trim();
@@ -329,7 +366,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
               }
               Navigator.of(context).pop();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
+            style:
+            ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
             child: Text(isRename ? 'Umbenennen' : 'Bestätigen',
                 style: const TextStyle(color: Colors.white)),
           ),
@@ -341,8 +379,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
   void _showAssignGroup(String folderName) {
     showModalBottomSheet<void>(
       context: context,
-      shape:
-      const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var groupName in _groups.keys)
@@ -398,10 +436,23 @@ class _FolderTile extends StatelessWidget {
               ),
             ),
             if (onRemoveFromGroup != null)
-              IconButton(icon: const Icon(Icons.remove_circle, color: Colors.red), onPressed: onRemoveFromGroup),
-            IconButton(icon: const Icon(Icons.group, color: Colors.purple), onPressed: onGroup),
-            IconButton(icon: const Icon(Icons.edit, color: Colors.grey), onPressed: onRename, splashRadius: 24),
-            IconButton(icon: const Icon(Icons.delete, color: Colors.black54), onPressed: onDelete),
+              IconButton(
+                icon: const Icon(Icons.remove_circle, color: Colors.red),
+                onPressed: onRemoveFromGroup,
+              ),
+            IconButton(
+              icon: const Icon(Icons.group, color: Colors.purple),
+              onPressed: onGroup,
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.grey),
+              onPressed: onRename,
+              splashRadius: 24,
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.black54),
+              onPressed: onDelete,
+            ),
           ],
         ),
       ),

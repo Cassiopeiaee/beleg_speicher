@@ -59,6 +59,7 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   String _email = '', _password = '';
+  bool _isLoading = false;
 
   /// Lege in Firestore unter users/{uid} ein Profil an, falls noch nicht vorhanden.
   Future<void> _ensureUserDoc(User user, String provider) async {
@@ -76,6 +77,7 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _emailLogin() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
+    setState(() => _isLoading = true);
     try {
       final cred = await FirebaseAuth.instance
           .signInWithEmailAndPassword(email: _email, password: _password);
@@ -93,14 +95,16 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login fehlgeschlagen: ${e.message}')),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _googleLogin() async {
+    setState(() => _isLoading = true);
     try {
       // Versuche Google-SignIn direkt
-      final cred = await AuthHelpers.signInWithGoogle()
-      as UserCredential; // erwartet UserCredential mit google-credential
+      final cred = await AuthHelpers.signInWithGoogle() as UserCredential;
       final user = cred.user!;
       await _ensureUserDoc(user, 'google');
 
@@ -154,6 +158,8 @@ class _LoginPageState extends State<LoginPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Fehler: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -215,77 +221,92 @@ class _LoginPageState extends State<LoginPage> {
           splashRadius: 24,
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Form(
-              key: _formKey,
-              child: Column(children: [
-                TextFormField(
-                  decoration: _buildInputDecoration('E-Mail'),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) =>
-                  (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
-                  onSaved: (v) => _email = v!.trim(),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  decoration: _buildInputDecoration('Passwort'),
-                  obscureText: true,
-                  validator: (v) =>
-                  (v != null && v.length >= 8 && RegExp(r'\d').hasMatch(v))
-                      ? null
-                      : 'Mindestens 8 Zeichen & eine Zahl',
-                  onSaved: (v) => _password = v!,
-                ),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _emailLogin,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple.shade400,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Form(
+                  key: _formKey,
+                  child: Column(children: [
+                    TextFormField(
+                      decoration: _buildInputDecoration('E-Mail'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) =>
+                      (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
+                      onSaved: (v) => _email = v!.trim(),
                     ),
-                    child:
-                    const Text('Einloggen', style: TextStyle(color: Colors.white)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const ResetPasswordPage()),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: _buildInputDecoration('Passwort'),
+                      obscureText: true,
+                      validator: (v) =>
+                      (v != null && v.length >= 8 && RegExp(r'\d').hasMatch(v))
+                          ? null
+                          : 'Mindestens 8 Zeichen & eine Zahl',
+                      onSaved: (v) => _password = v!,
                     ),
-                    child: const Text(
-                      'Passwort vergessen?',
-                      style: TextStyle(
-                        color: Colors.blue,
-                        decoration: TextDecoration.underline,
-                        fontSize: 16,
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _emailLogin,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple.shade400,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child:
+                        const Text('Einloggen', style: TextStyle(color: Colors.white)),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const ResetPasswordPage()),
+                        ),
+                        child: const Text(
+                          'Passwort vergessen?',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ]),
                 ),
-              ]),
+                const SizedBox(height: 24),
+                Row(children: const [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('oder'),
+                  ),
+                  Expanded(child: Divider()),
+                ]),
+                const SizedBox(height: 24),
+                GoogleAuthButton(text: 'Mit Google anmelden', onPressed: _googleLogin),
+              ],
             ),
-            const SizedBox(height: 24),
-            Row(children: const [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('oder'),
+          ),
+
+          // Lade-Overlay
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black38,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
               ),
-              Expanded(child: Divider()),
-            ]),
-            const SizedBox(height: 24),
-            GoogleAuthButton(text: 'Mit Google anmelden', onPressed: _googleLogin),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -303,6 +324,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final _passwordController = TextEditingController();
   final _passwordFocus = FocusNode();
   bool _showPwdHint = false, _isLengthValid = false, _hasNumber = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -339,6 +361,7 @@ class _RegisterPageState extends State<RegisterPage> {
   Future<void> _emailRegister() async {
     if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
+    setState(() => _isLoading = true);
     try {
       final cred = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: _email, password: _password);
@@ -356,10 +379,13 @@ class _RegisterPageState extends State<RegisterPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Registrierung fehlgeschlagen: ${e.message}')),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _googleRegister() async {
+    setState(() => _isLoading = true);
     try {
       final cred = await AuthHelpers.signInWithGoogle() as UserCredential;
       final user = cred.user!;
@@ -371,13 +397,14 @@ class _RegisterPageState extends State<RegisterPage> {
       }
 
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-            builder: (_) => HomePage(firstName: user.email ?? '', lastName: '')),
+        MaterialPageRoute(builder: (_) => HomePage(firstName: user.email ?? '', lastName: '')),
       );
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google Sign-Up fehlgeschlagen: ${e.message}')),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -399,77 +426,92 @@ class _RegisterPageState extends State<RegisterPage> {
           splashRadius: 24,
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          children: [
-            Form(
-              key: _formKey,
-              child: Column(children: [
-                TextFormField(
-                  decoration: _buildInputDecoration('E-Mail'),
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) =>
-                  (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
-                  onSaved: (v) => _email = v!.trim(),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  focusNode: _passwordFocus,
-                  decoration: _buildInputDecoration('Passwort'),
-                  obscureText: true,
-                  validator: (v) =>
-                  (_isLengthValid && _hasNumber) ? null : 'Mindestens 8 Zeichen & eine Zahl',
-                  onSaved: (v) => _password = v!,
-                ),
-                if (_showPwdHint) ...[
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Text('• ', style: TextStyle(color: _bulletColor(_isLengthValid))),
-                    Expanded(
-                      child: Text('Mindestlänge 8 Zeichen',
-                          style: TextStyle(color: _bulletColor(_isLengthValid))),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                Form(
+                  key: _formKey,
+                  child: Column(children: [
+                    TextFormField(
+                      decoration: _buildInputDecoration('E-Mail'),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) =>
+                      (v != null && v.contains('@')) ? null : 'Ungültige E-Mail',
+                      onSaved: (v) => _email = v!.trim(),
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocus,
+                      decoration: _buildInputDecoration('Passwort'),
+                      obscureText: true,
+                      validator: (v) =>
+                      (_isLengthValid && _hasNumber) ? null : 'Mindestens 8 Zeichen & eine Zahl',
+                      onSaved: (v) => _password = v!,
+                    ),
+                    if (_showPwdHint) ...[
+                      const SizedBox(height: 8),
+                      Row(children: [
+                        Text('• ', style: TextStyle(color: _bulletColor(_isLengthValid))),
+                        Expanded(
+                          child: Text('Mindestlänge 8 Zeichen',
+                              style: TextStyle(color: _bulletColor(_isLengthValid))),
+                        ),
+                      ]),
+                      Row(children: [
+                        Text('• ', style: TextStyle(color: _bulletColor(_hasNumber))),
+                        Expanded(
+                          child: Text('Mindestens 1 Zahl',
+                              style: TextStyle(color: _bulletColor(_hasNumber))),
+                        ),
+                      ]),
+                    ],
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _emailRegister,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.purple.shade400,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child:
+                        const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
+                      ),
                     ),
                   ]),
-                  Row(children: [
-                    Text('• ', style: TextStyle(color: _bulletColor(_hasNumber))),
-                    Expanded(
-                      child: Text('Mindestens 1 Zahl',
-                          style: TextStyle(color: _bulletColor(_hasNumber))),
-                    ),
-                  ]),
-                ],
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _emailRegister,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple.shade400,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child:
-                    const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
+                ),
+                const SizedBox(height: 24),
+                Row(children: const [
+                  Expanded(child: Divider()),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('oder'),
                   ),
-                ),
-              ]),
+                  Expanded(child: Divider()),
+                ]),
+                const SizedBox(height: 24),
+                GoogleAuthButton(text: 'Mit Google registrieren', onPressed: _googleRegister),
+              ],
             ),
-            const SizedBox(height: 24),
-            Row(children: const [
-              Expanded(child: Divider()),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('oder'),
+          ),
+
+          // Lade-Overlay
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black38,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
               ),
-              Expanded(child: Divider()),
-            ]),
-            const SizedBox(height: 24),
-            GoogleAuthButton(text: 'Mit Google registrieren', onPressed: _googleRegister),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

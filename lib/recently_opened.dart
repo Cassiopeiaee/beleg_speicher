@@ -14,10 +14,8 @@ class RecentlyOpenedPage extends StatelessWidget {
   Future<Map<String, List<String>>> _loadOpenedDocs() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString('opened_docs') ?? '{}';
-    final Map<String,dynamic> decoded = jsonDecode(raw);
-    return decoded.map((day, list) =>
-        MapEntry(day, List<String>.from(list))
-    );
+    final Map<String, dynamic> decoded = jsonDecode(raw);
+    return decoded.map((day, list) => MapEntry(day, List<String>.from(list)));
   }
 
   String _dayLabel(String dateKey) {
@@ -33,7 +31,8 @@ class RecentlyOpenedPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Zuletzt geöffnet', style: TextStyle(color: Colors.black)),
+        title:
+        const Text('Zuletzt geöffnet', style: TextStyle(color: Colors.black)),
         backgroundColor: Colors.white,
         elevation: 0,
         leading: BackButton(color: Colors.black),
@@ -50,9 +49,10 @@ class RecentlyOpenedPage extends StatelessWidget {
           final recentKeys = data.keys
               .where((k) => DateTime.parse(k).isAfter(cutoff))
               .toList()
-            ..sort((a,b) => b.compareTo(a)); // neueste zuerst
+            ..sort((a, b) => b.compareTo(a)); // neueste zuerst
           if (recentKeys.isEmpty) {
-            return const Center(child: Text('Keine Einträge der letzten 7 Tage'));
+            return const Center(
+                child: Text('Keine Einträge der letzten 7 Tage'));
           }
           return ListView.builder(
             padding: const EdgeInsets.all(16),
@@ -64,14 +64,18 @@ class RecentlyOpenedPage extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(label,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   ...docs.map((path) {
                     final name = File(path).uri.pathSegments.last;
-                    final folderName = File(path).parent.uri.pathSegments.last;
+                    final folderName =
+                        File(path).parent.uri.pathSegments.last;
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.insert_drive_file, color: Colors.purple),
+                      leading:
+                      const Icon(Icons.insert_drive_file, color: Colors.purple),
                       title: Text(name),
                       subtitle: Text('Ordner: $folderName'),
                       onTap: () {
@@ -79,7 +83,8 @@ class RecentlyOpenedPage extends StatelessWidget {
                         OpenFile.open(path);
                         // 2) in den Ordner navigieren:
                         Navigator.of(context).push(MaterialPageRoute(
-                          builder: (_) => InsideOrdnerPage(folderName: folderName),
+                          builder: (_) =>
+                              InsideOrdnerPage(folderName: folderName),
                         ));
                       },
                     );

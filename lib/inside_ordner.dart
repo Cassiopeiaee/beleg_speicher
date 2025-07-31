@@ -30,9 +30,9 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   static const _prefsDocsPrefix = 'docs_';
   static const _prefsEventsKey = 'calendar_events';
   static const _prefsLastOpened = 'last_opened_doc';
-  // hier muss der Key mit CloudSyncManager übereinstimmen:
   static const _prefsCloudKey = 'cloudSyncEnabled';
 
+  bool _isLoading = false;
   List<String> _docs = [];
   String? _lastOpened;
 
@@ -112,28 +112,37 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   }
 
   Future<void> _importImage() async {
-    final picker = ImagePicker();
-    final XFile? image =
-    await picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      _docs.insert(0, image.path);
-      await _saveDocs();
-      await _addCalendarEvent();
-      await _maybeUploadToCloud(image.path);
-      setState(() {});
+    setState(() => _isLoading = true);
+    try {
+      final picker = ImagePicker();
+      final XFile? image =
+      await picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        _docs.insert(0, image.path);
+        await _saveDocs();
+        await _addCalendarEvent();
+        await _maybeUploadToCloud(image.path);
+        setState(() {});
+      }
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   Future<void> _importFile() async {
-    final typeGroup =
-    XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
-    final file = await openFile(acceptedTypeGroups: [typeGroup]);
-    if (file != null) {
-      _docs.insert(0, file.path);
-      await _saveDocs();
-      await _addCalendarEvent();
-      await _maybeUploadToCloud(file.path);
-      setState(() {});
+    setState(() => _isLoading = true);
+    try {
+      final typeGroup = XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
+      final file = await openFile(acceptedTypeGroups: [typeGroup]);
+      if (file != null) {
+        _docs.insert(0, file.path);
+        await _saveDocs();
+        await _addCalendarEvent();
+        await _maybeUploadToCloud(file.path);
+        setState(() {});
+      }
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -166,14 +175,19 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
             onPressed: () async {
               final newName = controller.text.trim();
               if (newName.isNotEmpty) {
-                final dir = File(oldPath).parent.path;
-                final newPath = p.join(dir, newName);
-                await File(oldPath).rename(newPath);
-                _docs[index] = newPath;
-                await _saveDocs();
-                await _addCalendarEvent();
-                await _maybeUploadToCloud(newPath);
-                setState(() {});
+                setState(() => _isLoading = true);
+                try {
+                  final dir = File(oldPath).parent.path;
+                  final newPath = p.join(dir, newName);
+                  await File(oldPath).rename(newPath);
+                  _docs[index] = newPath;
+                  await _saveDocs();
+                  await _addCalendarEvent();
+                  await _maybeUploadToCloud(newPath);
+                  setState(() {});
+                } finally {
+                  setState(() => _isLoading = false);
+                }
               }
               Navigator.of(context).pop();
             },
@@ -188,11 +202,11 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   }
 
   Future<void> _exportAllDocs() async {
-    final destPath = await FilePicker.platform
-        .getDirectoryPath(dialogTitle: 'Zielordner auswählen');
-    if (destPath == null) return;
-
+    setState(() => _isLoading = true);
     try {
+      final destPath = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: 'Zielordner auswählen');
+      if (destPath == null) return;
       for (var path in _docs) {
         final name = p.basename(path);
         await File(path).copy(p.join(destPath, name));
@@ -200,8 +214,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Alle Dokumente exportiert')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Fehler beim Export: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Fehler beim Export: $e')));
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
@@ -286,55 +302,71 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
           ),
         ]),
       ),
-      body: SafeArea(
-        child: _docs.isEmpty
-            ? const Center(child: Text('Keine Dokumente'))
-            : ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: _docs.length,
-          separatorBuilder: (_, __) =>
-          const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final path = _docs[index];
-            final name = p.basename(path);
-            final isLast = path == _lastOpened;
-            return ListTile(
-              tileColor: isLast
-                  ? Colors.yellow.shade100
-                  : Colors.grey.shade100,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              leading: const Icon(Icons.insert_drive_file,
-                  color: Colors.blue),
-              title: Text(name,
-                  style: const TextStyle(color: Colors.black)),
-              trailing: Row(
-                  mainAxisSize: MainAxisSize.min, children: [
-                IconButton(
-                    icon: const Icon(Icons.visibility,
-                        color: Colors.purple),
-                    onPressed: () => _openDoc(path)),
-                IconButton(
-                    icon: const Icon(Icons.download,
-                        color: Colors.green),
-                    onPressed: () =>
-                        Share.shareXFiles([XFile(path)])),
-                IconButton(
-                    icon: const Icon(Icons.edit,
-                        color: Colors.grey),
-                    onPressed: () => _renameDoc(index)),
-                IconButton(
-                    icon: const Icon(Icons.delete,
-                        color: Colors.red),
-                    onPressed: () {
-                      _docs.removeAt(index);
-                      _saveDocs();
-                      setState(() {});
-                    }),
-              ]),
-            );
-          },
-        ),
+      body: Stack(
+        children: [
+          SafeArea(
+            child: _docs.isEmpty
+                ? const Center(child: Text('Keine Dokumente'))
+                : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: _docs.length,
+              separatorBuilder: (_, __) =>
+              const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final path = _docs[index];
+                final name = p.basename(path);
+                final isLast = path == _lastOpened;
+                return ListTile(
+                  tileColor: isLast
+                      ? Colors.yellow.shade100
+                      : Colors.grey.shade100,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  leading: const Icon(Icons.insert_drive_file,
+                      color: Colors.blue),
+                  title: Text(name,
+                      style: const TextStyle(color: Colors.black)),
+                  trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                            icon: const Icon(Icons.visibility,
+                                color: Colors.purple),
+                            onPressed: () => _openDoc(path)),
+                        IconButton(
+                            icon: const Icon(Icons.download,
+                                color: Colors.green),
+                            onPressed: () =>
+                                Share.shareXFiles([XFile(path)])),
+                        IconButton(
+                            icon: const Icon(Icons.edit,
+                                color: Colors.grey),
+                            onPressed: () => _renameDoc(index)),
+                        IconButton(
+                            icon: const Icon(Icons.delete,
+                                color: Colors.red),
+                            onPressed: () {
+                              _docs.removeAt(index);
+                              _saveDocs();
+                              setState(() {});
+                            }),
+                      ]),
+                );
+              },
+            ),
+          ),
+
+          // Lade-Overlay
+          if (_isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black38,
+                child: const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
