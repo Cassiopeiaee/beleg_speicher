@@ -1,6 +1,9 @@
+// lib/inside_ordner.dart
+
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart'; // für compute()
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,6 +19,22 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'cloud_sync_manager.dart';
+
+/// Lädt im Hintergrund alle Dateien in einen Ordner.
+/// Wird via compute() aufgerufen.
+Future<void> _copyFilesInBackground(Map<String, dynamic> args) async {
+  final List<String> paths = List<String>.from(args['paths'] as List);
+  final String destPath = args['dest'] as String;
+
+  for (final path in paths) {
+    final name = p.basename(path);
+    try {
+      await File(path).copy(p.join(destPath, name));
+    } catch (_) {
+      // Fehler einzelner Dateien ignorieren
+    }
+  }
+}
 
 class InsideOrdnerPage extends StatefulWidget {
   final String folderName;
@@ -55,10 +74,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
       final prefs = await SharedPreferences.getInstance();
       final key = '$_prefsDocsPrefix${widget.folderName}';
 
-      // Lokale Docs
+      // Lokale Dokumente
       _docs = prefs.getStringList(key) ?? [];
 
-      // Wenn Cloud-Sync und noch keine lokalen Docs, lade nur dann aus der Cloud
+      // Falls Cloud-Sync aktiv und noch keine lokalen Docs, aus Cloud laden
       if (await CloudSyncManager.isSyncEnabledLocal() && _docs.isEmpty) {
         await CloudSyncManager.downloadFolderToLocal(widget.folderName);
         _docs = prefs.getStringList(key) ?? [];
@@ -81,11 +100,9 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   Future<void> _addCalendarEvent() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsEventsKey);
-    final decoded = raw != null
-        ? jsonDecode(raw) as Map<String, dynamic>
-        : <String, dynamic>{};
-    final events =
-    decoded.map((k, v) => MapEntry(k, List<String>.from(v as List)));
+    final Map<String, dynamic> decoded =
+    raw != null ? jsonDecode(raw) as Map<String, dynamic> : {};
+    final events = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     events[today] = (events[today] ?? []);
     if (!events[today]!.contains(widget.folderName)) {
@@ -114,7 +131,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
         .collection('files');
 
     try {
-      // Nur uploaden, wenn noch nicht da
+      // Nur uploaden, wenn nicht vorhanden
       final meta = await storageRef.getMetadata().catchError((_) => null);
       if (meta == null) {
         await storageRef.putFile(file);
@@ -151,8 +168,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   Future<void> _importFile() async {
     setState(() => _isLoading = true);
     try {
-      final typeGroup =
-      XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
+      final typeGroup = XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
       final file = await openFile(acceptedTypeGroups: [typeGroup]);
       if (file != null) {
         _docs.insert(0, file.path);
@@ -225,10 +241,10 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
       final destPath = await FilePicker.platform
           .getDirectoryPath(dialogTitle: 'Zielordner auswählen');
       if (destPath != null) {
-        for (var path in _docs) {
-          final name = p.basename(path);
-          await File(path).copy(p.join(destPath, name));
-        }
+        await compute(_copyFilesInBackground, {
+          'paths': _docs,
+          'dest': destPath,
+        });
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Alle Dokumente exportiert')));
       }
@@ -244,8 +260,7 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius:
-        BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
@@ -343,8 +358,8 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
                       borderRadius: BorderRadius.circular(12)),
                   leading: const Icon(Icons.insert_drive_file,
                       color: Colors.blue),
-                  title: Text(name,
-                      style: const TextStyle(color: Colors.black)),
+                  title:
+                  Text(name, style: const TextStyle(color: Colors.black)),
                   trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -374,8 +389,6 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
               },
             ),
           ),
-
-          // Lade-Overlay
           if (_isLoading)
             Positioned.fill(
               child: Container(

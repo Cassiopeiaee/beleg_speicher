@@ -43,33 +43,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _initializeSync() async {
-    // Remote-Flag aus Firestore holen
     final enabled = await CloudSyncManager.fetchRemoteSyncFlag();
     setState(() => _cloudEnabled = enabled);
-
-    // Download aus der Cloud entfernt —
-    // Dateien werden jetzt folderweise beim Öffnen geladen.
+    // Wir laden die Dateien nicht mehr automatisch hier,
+    // sondern Ordner-weise erst beim Öffnen in InsideOrdnerPage.
   }
 
   Future<void> _toggleCloudSync() async {
     if (_cloudEnabled) {
-      // Deaktivieren: Remote-Flag ausschalten
       await CloudSyncManager.setRemoteSyncFlag(false);
       setState(() => _cloudEnabled = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cloud-Sync deaktiviert')),
       );
     } else {
-      // Aktivieren: erst lokal hochladen
       await CloudSyncManager.uploadLocalToCloud();
-      // Pop-up anzeigen, wenn Upload abgeschlossen ist
       _showUploadNotification();
-
-      // Remote-Flag setzen
       await CloudSyncManager.setRemoteSyncFlag(true);
       setState(() => _cloudEnabled = true);
-
-      // Download entfernt — die Dateien kommen beim Öffnen der Ordner.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cloud-Sync aktiviert und synchronisiert')),
       );
@@ -179,7 +170,8 @@ class _HomePageState extends State<HomePage> {
                       year: y,
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => YearBelegPage(year: y)),
+                          MaterialPageRoute(
+                              builder: (_) => YearBelegPage(year: y)),
                         );
                       },
                     ),
@@ -335,7 +327,6 @@ class _UploadNotificationState extends State<_UploadNotification>
   @override
   void initState() {
     super.initState();
-    // Animation von v=1.0 → 0.0 in 3 Sekunden
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 3),
