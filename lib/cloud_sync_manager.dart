@@ -1,5 +1,3 @@
-// lib/cloud_sync_manager.dart
-
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -80,6 +78,43 @@ class CloudSyncManager {
     return urls;
   }
 
+  /// Downloadt alle in der Cloud gespeicherten Dateien eines bestimmten Ordners
+  /// nur wenn sie noch nicht lokal existieren, und cached sie in SharedPreferences.
+  static Future<void> downloadFolderToLocal(String folder) async {
+    final prefs = await SharedPreferences.getInstance();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final uid = user.uid;
+    final storage = FirebaseStorage.instance;
+    final localRoot = await getApplicationDocumentsDirectory();
+    final dir = Directory('${localRoot.path}/$folder');
+    if (!await dir.exists()) await dir.create(recursive: true);
+
+    final key = 'docs_$folder';
+    final list = prefs.getStringList(key) ?? [];
+
+    final res = await storage.ref('backups/$uid/$folder').listAll();
+    for (final item in res.items) {
+      final name = item.name;
+      final localPath = '${dir.path}/$name';
+      final file = File(localPath);
+      if (await file.exists()) continue; // schon geladen => überspringen
+
+      try {
+        final bytes = await item.getData();
+        if (bytes != null) {
+          await file.writeAsBytes(bytes, flush: true);
+          if (!list.contains(localPath)) list.add(localPath);
+          debugPrint('Download ${item.fullPath} → $localPath erfolgreich');
+        }
+      } catch (e) {
+        debugPrint('Download ${item.fullPath} fehlgeschlagen: $e');
+      }
+    }
+
+    await prefs.setStringList(key, list);
+  }
+
   /// Uploadt alle lokal existierenden Dokumente in die Cloud
   static Future<void> uploadLocalToCloud() async {
     final prefs = await SharedPreferences.getInstance();
@@ -103,61 +138,21 @@ class CloudSyncManager {
         final name = path.split(Platform.pathSeparator).last;
         final ref = storage.ref('backups/$uid/$folder/$name');
         try {
-          await ref.putFile(file);
-          await filesCol.doc('$folder/$name').set({
-            'folder': folder,
-            'fileName': name,
-            'storagePath': ref.fullPath,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
-          debugPrint('Upload $path erfolgreich');
+          // Nur uploaden, wenn noch nicht in Storage vorhanden
+          final meta = await ref.getMetadata().catchError((_) => null);
+          if (meta == null) {
+            await ref.putFile(file);
+            await filesCol.doc('$folder/$name').set({
+              'folder': folder,
+              'fileName': name,
+              'storagePath': ref.fullPath,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
+            debugPrint('Upload $path erfolgreich');
+          }
         } catch (e) {
           debugPrint('Upload $path fehlgeschlagen: $e');
         }
-      }
-    }
-  }
-
-  /// Downloadt alle in der Cloud gespeicherten Dateien herunter
-  /// und legt sie lokal ab
-  static Future<void> downloadCloudToLocal() async {
-    final prefs = await SharedPreferences.getInstance();
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-    final uid = user.uid;
-
-    final filesCol = FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .collection('files');
-    final storage = FirebaseStorage.instance;
-    final localRoot = await getApplicationDocumentsDirectory();
-
-    final snapshot = await filesCol.get();
-    for (final doc in snapshot.docs) {
-      final data = doc.data();
-      final folder = data['folder'] as String;
-      final name = data['fileName'] as String;
-      final storagePath = data['storagePath'] as String;
-
-      final dir = Directory('${localRoot.path}/$folder');
-      if (!await dir.exists()) await dir.create(recursive: true);
-
-      final file = File('${dir.path}/$name');
-      try {
-        final bytes = await storage.ref(storagePath).getData();
-        if (bytes != null) {
-          await file.writeAsBytes(bytes, flush: true);
-          final key = 'docs_$folder';
-          final list = prefs.getStringList(key) ?? [];
-          if (!list.contains(file.path)) {
-            list.add(file.path);
-            await prefs.setStringList(key, list);
-          }
-          debugPrint('Download $storagePath → ${file.path} erfolgreich');
-        }
-      } catch (e) {
-        debugPrint('Download $storagePath fehlgeschlagen: $e');
       }
     }
   }

@@ -84,11 +84,8 @@ class _LoginPageState extends State<LoginPage> {
 
       await _ensureUserDoc(cred.user!, 'password');
 
-      // Sync-Flag und Daten
-      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
-      if (syncEnabled) {
-        await CloudSyncManager.downloadCloudToLocal();
-      }
+      // Nur noch Flag hol­en, kein Download mehr:
+      await CloudSyncManager.fetchRemoteSyncFlag();
 
       _navigateToHome(cred.user!);
     } on FirebaseAuthException catch (e) {
@@ -103,45 +100,33 @@ class _LoginPageState extends State<LoginPage> {
   Future<void> _googleLogin() async {
     setState(() => _isLoading = true);
     try {
-      // Versuche Google-SignIn direkt
       final cred = await AuthHelpers.signInWithGoogle() as UserCredential;
       final user = cred.user!;
       await _ensureUserDoc(user, 'google');
 
-      // Sync-Flag und Daten
-      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
-      if (syncEnabled) {
-        await CloudSyncManager.downloadCloudToLocal();
-      }
+      // Nur noch Flag hol­en, kein Download mehr:
+      await CloudSyncManager.fetchRemoteSyncFlag();
 
       _navigateToHome(user);
     } on FirebaseAuthException catch (e) {
       if (e.code == 'account-exists-with-different-credential') {
-        // Der Nutzer hat bereits ein E-Mail/PW-Konto unter dieser E-Mail
         final email = e.email!;
-        final pendingCred = e.credential!; // Google-Credential
-        // Passwort mit Dialog abfragen
+        final pendingCred = e.credential!;
         final password = await _askForPassword(email);
         if (password == null) {
-          // Abgebrochen
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Verknüpfung abgebrochen')),
           );
           return;
         }
         try {
-          // E-Mail/PW einloggen
           final userCred = await FirebaseAuth.instance
               .signInWithEmailAndPassword(email: email, password: password);
           final user = userCred.user!;
-          // Mit Google-Credential verknüpfen
           await user.linkWithCredential(pendingCred);
           await _ensureUserDoc(user, 'google');
 
-          final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
-          if (syncEnabled) {
-            await CloudSyncManager.downloadCloudToLocal();
-          }
+          await CloudSyncManager.fetchRemoteSyncFlag();
 
           _navigateToHome(user);
         } on FirebaseAuthException catch (e2) {
@@ -241,8 +226,9 @@ class _LoginPageState extends State<LoginPage> {
                     TextFormField(
                       decoration: _buildInputDecoration('Passwort'),
                       obscureText: true,
-                      validator: (v) =>
-                      (v != null && v.length >= 8 && RegExp(r'\d').hasMatch(v))
+                      validator: (v) => (v != null &&
+                          v.length >= 8 &&
+                          RegExp(r'\d').hasMatch(v))
                           ? null
                           : 'Mindestens 8 Zeichen & eine Zahl',
                       onSaved: (v) => _password = v!,
@@ -259,15 +245,16 @@ class _LoginPageState extends State<LoginPage> {
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                         ),
-                        child:
-                        const Text('Einloggen', style: TextStyle(color: Colors.white)),
+                        child: const Text('Einloggen',
+                            style: TextStyle(color: Colors.white)),
                       ),
                     ),
                     const SizedBox(height: 16),
                     Center(
                       child: GestureDetector(
                         onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ResetPasswordPage()),
+                          MaterialPageRoute(
+                              builder: (_) => const ResetPasswordPage()),
                         ),
                         child: const Text(
                           'Passwort vergessen?',
@@ -367,10 +354,8 @@ class _RegisterPageState extends State<RegisterPage> {
           .createUserWithEmailAndPassword(email: _email, password: _password);
       await _ensureUserDoc(cred.user!, 'password');
 
-      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
-      if (syncEnabled) {
-        await CloudSyncManager.downloadCloudToLocal();
-      }
+      // Nur Flag holen, kein Download:
+      await CloudSyncManager.fetchRemoteSyncFlag();
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => HomePage(firstName: _email, lastName: '')),
@@ -391,10 +376,7 @@ class _RegisterPageState extends State<RegisterPage> {
       final user = cred.user!;
       await _ensureUserDoc(user, 'google');
 
-      final syncEnabled = await CloudSyncManager.fetchRemoteSyncFlag();
-      if (syncEnabled) {
-        await CloudSyncManager.downloadCloudToLocal();
-      }
+      await CloudSyncManager.fetchRemoteSyncFlag();
 
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => HomePage(firstName: user.email ?? '', lastName: '')),
@@ -478,10 +460,10 @@ class _RegisterPageState extends State<RegisterPage> {
                           backgroundColor: Colors.purple.shade400,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
                         ),
-                        child:
-                        const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
+                        child: const Text('Konto erstellen', style: TextStyle(color: Colors.white)),
                       ),
                     ),
                   ]),

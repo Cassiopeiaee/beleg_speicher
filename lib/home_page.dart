@@ -47,10 +47,8 @@ class _HomePageState extends State<HomePage> {
     final enabled = await CloudSyncManager.fetchRemoteSyncFlag();
     setState(() => _cloudEnabled = enabled);
 
-    if (enabled) {
-      // Daten vom Cloud-Backup lokal herunterladen
-      await CloudSyncManager.downloadCloudToLocal();
-    }
+    // Download aus der Cloud entfernt —
+    // Dateien werden jetzt folderweise beim Öffnen geladen.
   }
 
   Future<void> _toggleCloudSync() async {
@@ -71,8 +69,7 @@ class _HomePageState extends State<HomePage> {
       await CloudSyncManager.setRemoteSyncFlag(true);
       setState(() => _cloudEnabled = true);
 
-      // Anschließend alle Cloud-Dateien herunterladen
-      await CloudSyncManager.downloadCloudToLocal();
+      // Download entfernt — die Dateien kommen beim Öffnen der Ordner.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cloud-Sync aktiviert und synchronisiert')),
       );
@@ -306,7 +303,8 @@ class _PillButton extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: TextStyle(fontSize: 14, color: Colors.black.withAlpha(204)),
+                      style: TextStyle(
+                          fontSize: 14, color: Colors.black.withAlpha(204)),
                     ),
                   ],
                 ),

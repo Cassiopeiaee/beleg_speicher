@@ -34,38 +34,43 @@ class _OrdnerPageState extends State<OrdnerPage> {
     setState(() => _isLoading = true);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedFolders = prefs.getStringList(_prefsFoldersKey);
-      if (savedFolders != null && savedFolders.isNotEmpty) {
-        _folders = List.from(savedFolders);
-      } else {
-        _folders = ['2025', '2024'];
-      }
+
+      // 1) Lokale Gruppen laden (als Fallback)
       final groupsJson = prefs.getString(_prefsGroupsKey);
       if (groupsJson != null) {
         final decoded = jsonDecode(groupsJson) as Map<String, dynamic>;
         _groups = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
       }
 
-      // Wenn Cloud-Sync aktiviert, lade Ordner + Gruppen aus Firestore
       if (await CloudSyncManager.isSyncEnabledLocal()) {
+        // 2) Gruppen aus Firestore holen (überschreibt lokale)
         final user = FirebaseAuth.instance.currentUser;
         if (user != null) {
           final doc = await FirebaseFirestore.instance
               .collection('users')
               .doc(user.uid)
               .get();
-          if (doc.exists) {
-            final data = doc.data()!;
-            if (data['folders'] is List) {
-              _folders = List<String>.from(data['folders']);
-            }
-            if (data['groups'] is Map) {
-              final gm = Map<String, dynamic>.from(data['groups']);
-              _groups = gm.map(
-                    (k, v) => MapEntry(k, List<String>.from(v as List)),
-              );
-            }
+          if (doc.exists && doc.data()!['groups'] is Map) {
+            final gm = Map<String, dynamic>.from(doc.data()!['groups']);
+            _groups = gm.map((k, v) => MapEntry(k, List<String>.from(v as List)));
           }
+        }
+
+        // 3) Ordner nur aus Cloud laden
+        _folders = await CloudSyncManager.listCloudFolders();
+        // *** NEU: herausfiltern, was bereits in einer Gruppe steckt ***
+        final grouped = _groups.values.expand((e) => e).toSet();
+        _folders = _folders.where((f) => !grouped.contains(f)).toList();
+
+        // in prefs cachen
+        await prefs.setStringList(_prefsFoldersKey, _folders);
+      } else {
+        // 4) Fallback: nur lokal
+        final saved = prefs.getStringList(_prefsFoldersKey);
+        if (saved != null && saved.isNotEmpty) {
+          _folders = List.from(saved);
+        } else {
+          _folders = ['2025', '2024'];
         }
       }
     } finally {
@@ -78,15 +83,19 @@ class _OrdnerPageState extends State<OrdnerPage> {
     await prefs.setStringList(_prefsFoldersKey, _folders);
     await prefs.setString(_prefsGroupsKey, jsonEncode(_groups));
 
-    // Bei aktiviertem Cloud-Sync auch in Firestore speichern
     if (await CloudSyncManager.isSyncEnabledLocal()) {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
+        // Speichere in Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .set({
-          'folders': _folders,
+          // alle Ordner: ungrupped + grouped
+          'folders': [
+            ..._folders,
+            ..._groups.values.expand((e) => e),
+          ],
           'groups': _groups,
         }, SetOptions(merge: true));
       }
@@ -110,7 +119,8 @@ class _OrdnerPageState extends State<OrdnerPage> {
         onPressed: _showAddOptions,
         backgroundColor: Colors.purple.shade400,
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
+        label:
+        const Text('Hinzufügen', style: TextStyle(color: Colors.white)),
       ),
       body: Stack(
         children: [
@@ -141,7 +151,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
                   Expanded(
                     child: ListView(
                       children: [
-                        // Gruppen
+                        // Gruppen-Bereich
                         for (var entry in _groups.entries)
                           ExpansionTile(
                             title: Text(
@@ -163,8 +173,9 @@ class _OrdnerPageState extends State<OrdnerPage> {
                                 GestureDetector(
                                   onTap: () => Navigator.of(context).push(
                                     MaterialPageRoute(
-                                        builder: (_) => InsideOrdnerPage(
-                                            folderName: name)),
+                                      builder: (_) =>
+                                          InsideOrdnerPage(folderName: name),
+                                    ),
                                   ),
                                   child: _FolderTile(
                                     name: name,
@@ -188,7 +199,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
                             ],
                           ),
 
-                        // Ungruppierte
+                        // Titel „Nicht zugeordnet“
                         if (_folders.isNotEmpty) ...[
                           const Divider(thickness: 2, color: Colors.purple),
                           const Padding(
@@ -200,13 +211,15 @@ class _OrdnerPageState extends State<OrdnerPage> {
                             ),
                           ),
                         ],
+
                         // Ungruppierte Ordner
                         for (var name in _folders)
                           GestureDetector(
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
-                                  builder: (_) =>
-                                      InsideOrdnerPage(folderName: name)),
+                                builder: (_) =>
+                                    InsideOrdnerPage(folderName: name),
+                              ),
                             ),
                             child: _FolderTile(
                               name: name,
@@ -243,6 +256,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
     );
   }
 
+  // BottomSheet: „Gruppe erstellen“ / „Ordner erstellen“
   void _showAddOptions() {
     showModalBottomSheet<void>(
       context: context,
@@ -271,6 +285,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
     );
   }
 
+  // Dialog: neue Gruppe
   void _showGroupDialog() {
     final controller = TextEditingController();
     showDialog<void>(
@@ -280,23 +295,13 @@ class _OrdnerPageState extends State<OrdnerPage> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.black),
-          decoration: InputDecoration(
-            labelText: 'Gruppen-Name',
-            labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            focusedBorder: UnderlineInputBorder(
-                borderSide:
-                BorderSide(color: Colors.purple.shade400, width: 2)),
-          ),
+          decoration: const InputDecoration(labelText: 'Gruppen-Name'),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Abbrechen')),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
           ElevatedButton(
             onPressed: () {
               final name = controller.text.trim();
@@ -306,43 +311,32 @@ class _OrdnerPageState extends State<OrdnerPage> {
               }
               Navigator.of(context).pop();
             },
-            style:
-            ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
-            child: const Text('Erstellen',
-                style: TextStyle(color: Colors.white)),
+            child: const Text('Erstellen'),
           ),
         ],
       ),
     );
   }
 
+  // Dialog: Ordner erstellen / umbenennen
   void _showFolderDialog({String? original}) {
     final isRename = original != null;
     final controller = TextEditingController(text: original ?? '');
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(isRename ? 'Ordner umbenennen' : 'Ordner erstellen'),
+        title:
+        Text(isRename ? 'Ordner umbenennen' : 'Ordner erstellen'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: const TextStyle(color: Colors.black),
-          decoration: InputDecoration(
-            labelText: 'Name',
-            labelStyle: const TextStyle(color: Colors.black),
-            border: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            enabledBorder: const UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black)),
-            focusedBorder: UnderlineInputBorder(
-                borderSide:
-                BorderSide(color: Colors.purple.shade400, width: 2)),
-          ),
+          decoration: const InputDecoration(labelText: 'Name'),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Abbrechen')),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Abbrechen'),
+          ),
           ElevatedButton(
             onPressed: () {
               final newName = controller.text.trim();
@@ -366,21 +360,20 @@ class _OrdnerPageState extends State<OrdnerPage> {
               }
               Navigator.of(context).pop();
             },
-            style:
-            ElevatedButton.styleFrom(backgroundColor: Colors.purple.shade400),
-            child: Text(isRename ? 'Umbenennen' : 'Bestätigen',
-                style: const TextStyle(color: Colors.white)),
+            child: Text(isRename ? 'Umbenennen' : 'Bestätigen'),
           ),
         ],
       ),
     );
   }
 
+  // BottomSheet: Ordner zu Gruppe hinzufügen
   void _showAssignGroup(String folderName) {
     showModalBottomSheet<void>(
       context: context,
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+          borderRadius:
+          BorderRadius.vertical(top: Radius.circular(16))),
       builder: (context) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           for (var groupName in _groups.keys)
@@ -401,6 +394,7 @@ class _OrdnerPageState extends State<OrdnerPage> {
   }
 }
 
+/// Einzelne Tile-Komponente
 class _FolderTile extends StatelessWidget {
   final String name;
   final VoidCallback onRename;
@@ -432,7 +426,9 @@ class _FolderTile extends StatelessWidget {
               child: Text(
                 name,
                 style: const TextStyle(
-                    fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black),
               ),
             ),
             if (onRemoveFromGroup != null)

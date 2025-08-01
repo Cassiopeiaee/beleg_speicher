@@ -1,5 +1,3 @@
-// lib/inside_ordner.dart
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,6 +14,8 @@ import 'package:path/path.dart' as p;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'cloud_sync_manager.dart';
 
 class InsideOrdnerPage extends StatefulWidget {
   final String folderName;
@@ -39,14 +39,35 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   @override
   void initState() {
     super.initState();
-    _loadDocs();
     _loadLastOpened();
+    _loadDocs();
+  }
+
+  Future<void> _loadLastOpened() async {
+    final prefs = await SharedPreferences.getInstance();
+    _lastOpened = prefs.getString(_prefsLastOpened);
+    setState(() {});
   }
 
   Future<void> _loadDocs() async {
-    final prefs = await SharedPreferences.getInstance();
-    _docs = prefs.getStringList('$_prefsDocsPrefix${widget.folderName}') ?? [];
-    setState(() {});
+    setState(() => _isLoading = true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_prefsDocsPrefix${widget.folderName}';
+
+      // Lokale Docs
+      _docs = prefs.getStringList(key) ?? [];
+
+      // Wenn Cloud-Sync und noch keine lokalen Docs, lade nur dann aus der Cloud
+      if (await CloudSyncManager.isSyncEnabledLocal() && _docs.isEmpty) {
+        await CloudSyncManager.downloadFolderToLocal(widget.folderName);
+        _docs = prefs.getStringList(key) ?? [];
+      }
+
+      setState(() {});
+    } finally {
+      setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _saveDocs() async {
@@ -57,18 +78,14 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     );
   }
 
-  Future<void> _loadLastOpened() async {
-    final prefs = await SharedPreferences.getInstance();
-    _lastOpened = prefs.getString(_prefsLastOpened);
-    setState(() {});
-  }
-
   Future<void> _addCalendarEvent() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefsEventsKey);
-    final Map<String, dynamic> decoded =
-    raw != null ? jsonDecode(raw) as Map<String, dynamic> : {};
-    final events = decoded.map((k, v) => MapEntry(k, List<String>.from(v)));
+    final decoded = raw != null
+        ? jsonDecode(raw) as Map<String, dynamic>
+        : <String, dynamic>{};
+    final events =
+    decoded.map((k, v) => MapEntry(k, List<String>.from(v as List)));
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
     events[today] = (events[today] ?? []);
     if (!events[today]!.contains(widget.folderName)) {
@@ -89,23 +106,26 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     if (!await file.exists()) return;
 
     final fileName = p.basename(localPath);
-    final storageRef = FirebaseStorage.instance
-        .ref('backups/$uid/${widget.folderName}/$fileName');
+    final storageRef =
+    FirebaseStorage.instance.ref('backups/$uid/${widget.folderName}/$fileName');
+    final filesCol = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('files');
 
     try {
-      await storageRef.putFile(file);
-
-      // Metadaten in Firestore speichern
-      final filesCol = FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .collection('files');
-      await filesCol.add({
-        'folder': widget.folderName,
-        'fileName': fileName,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'storagePath': storageRef.fullPath,
-      });
+      // Nur uploaden, wenn noch nicht da
+      final meta = await storageRef.getMetadata().catchError((_) => null);
+      if (meta == null) {
+        await storageRef.putFile(file);
+        await filesCol.doc('${widget.folderName}/$fileName').set({
+          'folder': widget.folderName,
+          'fileName': fileName,
+          'uploadedAt': FieldValue.serverTimestamp(),
+          'storagePath': storageRef.fullPath,
+        });
+        debugPrint('Cloud-Upload $localPath erfolgreich');
+      }
     } catch (e) {
       debugPrint('Cloud-Upload $localPath fehlgeschlagen: $e');
     }
@@ -122,7 +142,6 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
         await _saveDocs();
         await _addCalendarEvent();
         await _maybeUploadToCloud(image.path);
-        setState(() {});
       }
     } finally {
       setState(() => _isLoading = false);
@@ -132,14 +151,14 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
   Future<void> _importFile() async {
     setState(() => _isLoading = true);
     try {
-      final typeGroup = XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
+      final typeGroup =
+      XTypeGroup(label: 'Alle Dateien', extensions: ['*']);
       final file = await openFile(acceptedTypeGroups: [typeGroup]);
       if (file != null) {
         _docs.insert(0, file.path);
         await _saveDocs();
         await _addCalendarEvent();
         await _maybeUploadToCloud(file.path);
-        setState(() {});
       }
     } finally {
       setState(() => _isLoading = false);
@@ -184,7 +203,6 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
                   await _saveDocs();
                   await _addCalendarEvent();
                   await _maybeUploadToCloud(newPath);
-                  setState(() {});
                 } finally {
                   setState(() => _isLoading = false);
                 }
@@ -206,13 +224,14 @@ class _InsideOrdnerPageState extends State<InsideOrdnerPage> {
     try {
       final destPath = await FilePicker.platform
           .getDirectoryPath(dialogTitle: 'Zielordner auswählen');
-      if (destPath == null) return;
-      for (var path in _docs) {
-        final name = p.basename(path);
-        await File(path).copy(p.join(destPath, name));
+      if (destPath != null) {
+        for (var path in _docs) {
+          final name = p.basename(path);
+          await File(path).copy(p.join(destPath, name));
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Alle Dokumente exportiert')));
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Alle Dokumente exportiert')));
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Fehler beim Export: $e')));
