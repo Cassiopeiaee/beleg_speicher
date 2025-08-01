@@ -1,1 +1,38 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"beleg-speicher","appId":"1:264239207754:android:e8815085ee02d99b3d9db3","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"beleg-speicher","configurations":{"android":"1:264239207754:android:e8815085ee02d99b3d9db3","ios":"1:264239207754:ios:8b3c68aecc0c0a643d9db3","macos":"1:264239207754:ios:313cc808cd3e8a203d9db3"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "beleg-speicher",
+          "appId": "1:264239207754:android:e8815085ee02d99b3d9db3",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "beleg-speicher",
+          "configurations": {
+            "android": "1:264239207754:android:e8815085ee02d99b3d9db3",
+            "ios": "1:264239207754:ios:8b3c68aecc0c0a643d9db3",
+            "macos": "1:264239207754:ios:313cc808cd3e8a203d9db3"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": [
+      ]
+    }
+  ]
+}

@@ -1,5 +1,4 @@
 // lib/calendar.dart
-
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,11 +6,6 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'inside_ordner.dart';
-
-// Notification-Pakete
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -21,17 +15,15 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
-  static const _prefsEventsKey   = 'calendar_events';
-  static const _prefsNotesKey    = 'calendar_notes';
-  static const _prefsFoldersKey  = 'saved_folders';
-  static const _prefsGroupsKey   = 'saved_groups';
-
-  final FlutterLocalNotificationsPlugin _notifications =
-  FlutterLocalNotificationsPlugin();
+  static const _prefsEventsKey  = 'calendar_events';
+  static const _prefsNotesKey   = 'calendar_notes';
+  static const _prefsFoldersKey = 'saved_folders';
+  static const _prefsGroupsKey  = 'saved_groups';
 
   Map<DateTime, List<String>> _uploadEvents = {};
-  final Map<DateTime, List<String>> _notes        = {};
-  DateTime _focusedDay    = DateTime.now();
+  final Map<DateTime, List<String>> _notes = {};
+
+  DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   bool _localeInitialized = false;
 
@@ -39,7 +31,6 @@ class _CalendarPageState extends State<CalendarPage> {
   void initState() {
     super.initState();
     _initializeLocaleAndLoad();
-    _initializeNotifications();
   }
 
   Future<void> _initializeLocaleAndLoad() async {
@@ -49,26 +40,12 @@ class _CalendarPageState extends State<CalendarPage> {
     await _loadNotes();
   }
 
-  Future<void> _initializeNotifications() async {
-    tz.initializeTimeZones();
-
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const ios     = DarwinInitializationSettings();
-    const linux   = LinuxInitializationSettings(defaultActionName: 'Öffnen');
-    await _notifications.initialize(
-      const InitializationSettings(
-        android: android,
-        iOS: ios,
-        linux: linux,
-      ),
-    );
-  }
-
   Future<void> _loadUploadEvents() async {
     final prefs = await SharedPreferences.getInstance();
     final savedFolders = prefs.getStringList(_prefsFoldersKey) ?? [];
-    final groupsRaw    = prefs.getString(_prefsGroupsKey);
+    final groupsRaw = prefs.getString(_prefsGroupsKey);
     final Map<String, List<String>> groups = {};
+
     if (groupsRaw != null) {
       (jsonDecode(groupsRaw) as Map<String, dynamic>)
           .forEach((k, v) => groups[k] = List<String>.from(v));
@@ -81,7 +58,8 @@ class _CalendarPageState extends State<CalendarPage> {
       (jsonDecode(raw) as Map<String, dynamic>).forEach((dateStr, items) {
         final d = DateTime.parse(dateStr);
         final key = DateTime(d.year, d.month, d.day);
-        final kept = (items as List<dynamic>).cast<String>()
+        final kept = (items as List<dynamic>)
+            .cast<String>()
             .where(active.contains)
             .toList();
         if (kept.isNotEmpty) filtered[key] = kept;
@@ -122,31 +100,8 @@ class _CalendarPageState extends State<CalendarPage> {
   void _onDaySelected(DateTime selected, DateTime focused) {
     setState(() {
       _selectedDay = DateTime(selected.year, selected.month, selected.day);
-      _focusedDay  = focused;
+      _focusedDay = focused;
     });
-  }
-
-  Future<void> _scheduleNotification(DateTime date, String body) async {
-    final tzDate = tz.TZDateTime.from(date, tz.local);
-    await _notifications.zonedSchedule(
-      date.hashCode,
-      'Erinnerung',
-      body,
-      tzDate,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'reminder_channel',
-          'Erinnerungen',
-          importance: Importance.max,
-          priority: Priority.high,
-        ),
-        iOS: DarwinNotificationDetails(),
-        linux: LinuxNotificationDetails(),
-      ),
-      // v13.x:
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.dateAndTime,
-    );
   }
 
   Future<void> _showNoteDialog({int? editIndex}) async {
@@ -159,40 +114,29 @@ class _CalendarPageState extends State<CalendarPage> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(editIndex != null
-            ? 'Notiz bearbeiten'
-            : 'Notiz für ${DateFormat.yMMMd('de').format(key)}'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
-            controller: ctrl,
-            maxLines: 5,
-            decoration: InputDecoration(
-              hintText: 'Schreibe deine Notiz…',
-              enabledBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.black)),
-              focusedBorder: const UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.purple)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (editIndex == null)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24),
+        title: Text(
+          editIndex != null
+              ? 'Notiz bearbeiten'
+              : 'Notiz für ${DateFormat.yMMMd('de').format(key)}',
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: ctrl,
+              maxLines: 5,
+              decoration: InputDecoration(
+                hintText: 'Schreibe deine Notiz…',
+                enabledBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.black),
+                ),
+                focusedBorder: const UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.purple),
                 ),
               ),
-              onPressed: () async {
-                final text = ctrl.text.trim();
-                if (text.isNotEmpty) {
-                  await _scheduleNotification(key, text);
-                }
-                Navigator.of(ctx).pop();
-              },
-              child: const Text('Benachrichtigung planen'),
             ),
-        ]),
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -200,7 +144,8 @@ class _CalendarPageState extends State<CalendarPage> {
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purple.shade400),
+              backgroundColor: Colors.purple.shade400,
+            ),
             onPressed: () {
               final text = ctrl.text.trim();
               if (text.isNotEmpty) {
@@ -249,8 +194,7 @@ class _CalendarPageState extends State<CalendarPage> {
               title: Text(folderName),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) =>
-                      InsideOrdnerPage(folderName: folderName),
+                  builder: (_) => InsideOrdnerPage(folderName: folderName),
                 ),
               ),
             );
@@ -263,8 +207,42 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget _buildNoteList() {
     if (_selectedDay == null) return const SizedBox.shrink();
     final day = _selectedDay!;
+    // 1. System-Notiz für Steuerfrist am 31. Juli
+    final List<Widget> items = [];
+    if (day.month == 7 && day.day == 31) {
+      final steuerJahr = day.year - 1;
+      items.add(
+        ListTile(
+          title: Text('Steuerfrist für $steuerJahr'),
+          tileColor: Colors.red.shade200,
+          textColor: Colors.red.shade900,
+        ),
+      );
+    }
+    // 2. Vom Nutzer erstellte Notizen
     final notes = _getNotesForDay(day);
-    if (notes.isEmpty) return const SizedBox.shrink();
+    for (var i = 0; i < notes.length; i++) {
+      items.add(
+        ListTile(
+          title: Text(notes[i]),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue),
+                onPressed: () => _showNoteDialog(editIndex: i),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _deleteNoteAt(i),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (items.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Card(
@@ -272,24 +250,7 @@ class _CalendarPageState extends State<CalendarPage> {
         elevation: 2,
         child: ExpansionTile(
           title: const Text('Notizen'),
-          children: List.generate(notes.length, (i) {
-            return ListTile(
-              title: Text(notes[i]),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.blue),
-                    onPressed: () => _showNoteDialog(editIndex: i),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () => _deleteNoteAt(i),
-                  ),
-                ],
-              ),
-            );
-          }),
+          children: items,
         ),
       ),
     );
@@ -321,7 +282,7 @@ class _CalendarPageState extends State<CalendarPage> {
               padding: const EdgeInsets.all(16.0),
               child: TableCalendar(
                 firstDay: DateTime(2000),
-                lastDay:  DateTime(2100),
+                lastDay: DateTime(2100),
                 focusedDay: _focusedDay,
                 selectedDayPredicate: (d) =>
                 _selectedDay != null && isSameDay(_selectedDay, d),
@@ -329,7 +290,20 @@ class _CalendarPageState extends State<CalendarPage> {
                 eventLoader: _getUploadsForDay,
                 calendarBuilders: CalendarBuilders(
                   defaultBuilder: (ctx, day, _) {
-                    final key = DateTime(day.year, day.month, day.day);
+                    // Roter Kreis nur für reine visuelle Kennzeichnung
+                    if (day.month == 7 && day.day == 31) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.red,
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${day.day}',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      );
+                    }
                     if (_hasNoteForDay(day)) {
                       return Container(
                         decoration: BoxDecoration(
@@ -363,12 +337,14 @@ class _CalendarPageState extends State<CalendarPage> {
                   },
                 ),
                 calendarStyle: const CalendarStyle(
-                  todayDecoration:    BoxDecoration(color: Colors.purple, shape: BoxShape.circle),
-                  selectedDecoration: BoxDecoration(color: Colors.deepPurple, shape: BoxShape.circle),
+                  todayDecoration:
+                  BoxDecoration(color: Colors.purple, shape: BoxShape.circle),
+                  selectedDecoration:
+                  BoxDecoration(color: Colors.deepPurple, shape: BoxShape.circle),
                 ),
                 headerStyle: const HeaderStyle(
                   formatButtonVisible: false,
-                  titleCentered:      true,
+                  titleCentered: true,
                 ),
               ),
             ),
@@ -385,13 +361,15 @@ class _CalendarPageState extends State<CalendarPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.yellow.shade700,
                     foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(24),
+                    ),
                   ),
                   child: const Text('Notiz hinzufügen'),
                 ),
               ),
 
-            // Notizen
+            // Notizen (inkl. rote Steuerfrist-Notiz)
             if (_selectedDay != null) _buildNoteList(),
           ],
         ),

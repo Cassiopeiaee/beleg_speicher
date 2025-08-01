@@ -44,12 +44,17 @@ dependencies {
     // Firebase BoM: sorgt dafür, dass alle Firebase-Bibliotheken kompatible Versionen verwenden
     implementation(platform("com.google.firebase:firebase-bom:32.3.0"))
 
+    // Firebase Cloud Messaging (Kotlin-Extensions)
+    implementation("com.google.firebase:firebase-messaging-ktx")
+
     // Firebase Cloud Storage (Kotlin-Extensions)
     implementation("com.google.firebase:firebase-storage-ktx")
 
+    // Firebase Authentication (Kotlin-Extensions)
+    implementation("com.google.firebase:firebase-auth-ktx")
+
     // Beispiel weiterer Abhängigkeiten aus deinem Projekt:
     implementation("androidx.core:core-ktx:1.9.0")
-    implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.android.material:material:1.8.0")
     // … restliche deps
 }
